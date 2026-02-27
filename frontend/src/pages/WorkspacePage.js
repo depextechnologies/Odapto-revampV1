@@ -52,8 +52,8 @@ export default function WorkspacePage() {
   const fetchWorkspaceData = async () => {
     try {
       const [wsRes, boardsRes] = await Promise.all([
-        fetch(`${API}/workspaces/${workspaceId}`, { credentials: 'include' }),
-        fetch(`${API}/workspaces/${workspaceId}/boards`, { credentials: 'include' })
+        apiGet(`/workspaces/${workspaceId}`),
+        apiGet(`/workspaces/${workspaceId}/boards`)
       ]);
 
       if (wsRes.ok) {
@@ -81,14 +81,9 @@ export default function WorkspacePage() {
 
     setCreating(true);
     try {
-      const response = await fetch(`${API}/workspaces/${workspaceId}/boards`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          name: newBoardName,
-          background: newBoardColor
-        })
+      const response = await apiPost(`/workspaces/${workspaceId}/boards`, {
+        name: newBoardName,
+        background: newBoardColor
       });
 
       if (response.ok) {
@@ -114,10 +109,7 @@ export default function WorkspacePage() {
     if (!window.confirm('Are you sure you want to delete this board?')) return;
 
     try {
-      const response = await fetch(`${API}/boards/${boardId}`, {
-        method: 'DELETE',
-        credentials: 'include'
-      });
+      const response = await apiDelete(`/boards/${boardId}`);
 
       if (response.ok) {
         setBoards(boards.filter(b => b.board_id !== boardId));
