@@ -159,6 +159,16 @@ class Comment(BaseModel):
     content: str
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
+class CardLabel(BaseModel):
+    color: str  # hex color or color name
+    name: Optional[str] = None  # optional label name
+
+class CardMember(BaseModel):
+    user_id: str
+    name: str
+    email: str
+    picture: Optional[str] = None
+
 class Card(BaseModel):
     model_config = ConfigDict(extra="ignore")
     card_id: str
@@ -168,9 +178,9 @@ class Card(BaseModel):
     description: Optional[str] = None
     position: int
     due_date: Optional[datetime] = None
-    labels: List[str] = []
+    labels: List[Dict[str, str]] = []  # [{color, name}] - named labels
     priority: Optional[str] = None  # low, medium, high, urgent
-    assigned_members: List[str] = []
+    assigned_members: List[Dict[str, str]] = []  # [{user_id, name, email, picture}]
     attachments: List[Dict[str, str]] = []  # [{filename, url, uploaded_at}]
     checklist: List[ChecklistItem] = []
     comments: List[Comment] = []
@@ -183,7 +193,7 @@ class CardCreate(BaseModel):
     description: Optional[str] = None
     position: Optional[int] = None
     due_date: Optional[datetime] = None
-    labels: List[str] = []
+    labels: List[Dict[str, str]] = []
     priority: Optional[str] = None
     assigned_members: List[str] = []
 
@@ -193,10 +203,13 @@ class CardUpdate(BaseModel):
     position: Optional[int] = None
     list_id: Optional[str] = None
     due_date: Optional[datetime] = None
-    labels: Optional[List[str]] = None
+    labels: Optional[List[Dict[str, str]]] = None
     priority: Optional[str] = None
-    assigned_members: Optional[List[str]] = None
+    assigned_members: Optional[List[Dict[str, str]]] = None
     cover_image: Optional[str] = None
+
+class CardInviteRequest(BaseModel):
+    email: str
 
 class TemplateCategory(BaseModel):
     model_config = ConfigDict(extra="ignore")
