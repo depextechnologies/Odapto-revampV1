@@ -46,9 +46,18 @@ const BOARD_COLORS = [
 const getDueDateClass = (dueDate) => {
   if (!dueDate) return '';
   const date = new Date(dueDate);
-  if (isToday(date)) return 'bg-orange-500/20 text-orange-600';
-  if (isPast(date)) return 'bg-red-500/20 text-red-600';
-  return 'bg-muted text-muted-foreground';
+  const today = new Date();
+  // Normalize to start of day for comparison
+  const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  
+  if (dateOnly.getTime() === todayOnly.getTime()) {
+    return 'bg-orange-500/20 text-orange-600'; // Today - orange
+  }
+  if (dateOnly.getTime() < todayOnly.getTime()) {
+    return 'bg-red-500/20 text-red-600'; // Past - red (overdue)
+  }
+  return 'bg-muted text-muted-foreground'; // Future - gray
 };
 
 export default function BoardPage() {
