@@ -676,12 +676,15 @@ export default function BoardPage() {
                                       data-testid={`card-${card.card_id}`}
                                     >
                                       {/* Labels */}
+                                      {/* Labels */}
                                       {card.labels?.length > 0 && (
                                         <div className="flex flex-wrap gap-1 mb-2">
                                           {card.labels.map((label, idx) => (
                                             <span 
                                               key={idx}
-                                              className={`h-2 w-8 rounded-full ${LABEL_COLORS[label] || 'bg-gray-400'}`}
+                                              className="h-2 w-8 rounded-full"
+                                              style={{ backgroundColor: label.color || label }}
+                                              title={label.name || ''}
                                             />
                                           ))}
                                         </div>
@@ -693,8 +696,20 @@ export default function BoardPage() {
                                       
                                       {/* Card badges */}
                                       <div className="flex items-center gap-2 mt-2 flex-wrap">
+                                        {/* Priority badge */}
+                                        {card.priority && (
+                                          <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
+                                            card.priority === 'urgent' ? 'bg-red-500/20 text-red-600' :
+                                            card.priority === 'high' ? 'bg-orange-500/20 text-orange-600' :
+                                            card.priority === 'medium' ? 'bg-yellow-500/20 text-yellow-600' :
+                                            'bg-green-500/20 text-green-600'
+                                          }`}>
+                                            {card.priority.charAt(0).toUpperCase() + card.priority.slice(1)}
+                                          </span>
+                                        )}
+                                        {/* Due date with color coding */}
                                         {card.due_date && (
-                                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                          <span className={`flex items-center gap-1 text-xs px-1.5 py-0.5 rounded ${getDueDateClass(card.due_date)}`}>
                                             <Calendar className="w-3 h-3" />
                                             {new Date(card.due_date).toLocaleDateString()}
                                           </span>
@@ -705,7 +720,31 @@ export default function BoardPage() {
                                             {card.checklist.filter(c => c.completed).length}/{card.checklist.length}
                                           </span>
                                         )}
+                                        {card.attachments?.length > 0 && (
+                                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                            <Paperclip className="w-3 h-3" />
+                                            {card.attachments.length}
+                                          </span>
+                                        )}
                                       </div>
+                                      {/* Assigned members */}
+                                      {card.assigned_members?.length > 0 && (
+                                        <div className="flex -space-x-1 mt-2">
+                                          {card.assigned_members.slice(0, 3).map((member) => (
+                                            <Avatar key={member.user_id} className="h-6 w-6 border-2 border-background">
+                                              <AvatarImage src={member.picture} />
+                                              <AvatarFallback className="bg-odapto-teal text-white text-xs">
+                                                {getInitials(member.name)}
+                                              </AvatarFallback>
+                                            </Avatar>
+                                          ))}
+                                          {card.assigned_members.length > 3 && (
+                                            <span className="flex items-center justify-center h-6 w-6 rounded-full bg-muted text-xs border-2 border-background">
+                                              +{card.assigned_members.length - 3}
+                                            </span>
+                                          )}
+                                        </div>
+                                      )}
                                     </div>
                                   )}
                                 </Draggable>
