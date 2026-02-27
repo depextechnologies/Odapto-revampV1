@@ -55,17 +55,12 @@ export const CardDetailModal = ({ card, onClose, onUpdate, onDelete }) => {
   const saveCard = async () => {
     setSaving(true);
     try {
-      const response = await fetch(`${API}/cards/${card.card_id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          title,
-          description,
-          due_date: dueDate?.toISOString(),
-          labels,
-          priority: priority || null
-        })
+      const response = await apiPatch(`/cards/${card.card_id}`, {
+        title,
+        description,
+        due_date: dueDate?.toISOString(),
+        labels,
+        priority: priority || null
       });
 
       if (response.ok) {
@@ -86,10 +81,7 @@ export const CardDetailModal = ({ card, onClose, onUpdate, onDelete }) => {
     if (!window.confirm('Delete this card?')) return;
 
     try {
-      const response = await fetch(`${API}/cards/${card.card_id}`, {
-        method: 'DELETE',
-        credentials: 'include'
-      });
+      const response = await apiDelete(`/cards/${card.card_id}`);
 
       if (response.ok) {
         onDelete(card.card_id);
