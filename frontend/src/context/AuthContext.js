@@ -125,6 +125,10 @@ export const AuthProvider = ({ children }) => {
     }
     
     const userData = await response.json();
+    // Store session token in localStorage for persistence
+    if (userData.session_token) {
+      setStoredToken(userData.session_token);
+    }
     setUser(userData);
     return userData;
   };
@@ -133,12 +137,14 @@ export const AuthProvider = ({ children }) => {
     try {
       await fetch(`${API}/auth/logout`, {
         method: 'POST',
-        credentials: 'include'
+        credentials: 'include',
+        headers: getAuthHeaders()
       });
     } catch (error) {
       console.error('Logout error:', error);
     }
     setUser(null);
+    clearStoredToken();
   };
 
   const value = {
