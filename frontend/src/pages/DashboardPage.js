@@ -11,6 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '../components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import { apiGet, apiPost } from '../utils/api';
+import NotificationBell from '../components/NotificationBell';
 import { 
   Plus, 
   LayoutGrid, 
