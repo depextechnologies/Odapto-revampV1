@@ -51,10 +51,13 @@ Build Odapto with:
 - [x] JWT-like session management with tokens
 - [x] Role-based access control middleware
 - [x] Workspace CRUD with member management
-- [x] Board CRUD with background colors
+- [x] Board CRUD with background colors AND images
+- [x] Board member invitation with notifications
 - [x] List CRUD with position management
 - [x] Card CRUD with full features (labels, due dates, checklists, comments)
 - [x] Card move between lists endpoint
+- [x] Comment notifications to board members
+- [x] Notification system (create, read, mark read)
 - [x] Template categories (admin only)
 - [x] Board to template publishing (privileged users)
 - [x] Template gallery with category filtering
@@ -62,18 +65,21 @@ Build Odapto with:
 - [x] Global search across boards/cards/templates
 - [x] Admin analytics endpoint
 - [x] WebSocket endpoint for real-time collaboration
-- [x] File upload for card attachments
+- [x] File upload for card attachments and board backgrounds
 
 ### Frontend (React)
 - [x] Landing page with Odapto branding
 - [x] Login/Register pages with Google OAuth
-- [x] Dashboard with workspace listing
+- [x] Dashboard with workspace listing and notification bell
 - [x] Workspace page with board grid
 - [x] Kanban board with drag-drop (hello-pangea/dnd)
+- [x] Board member management and invitation
+- [x] Board background color/image customization
 - [x] Card detail modal with full editing
 - [x] Template gallery page
-- [x] Admin panel with user/category management
+- [x] Admin panel with user/category management and analytics
 - [x] Profile page
+- [x] Real-time notification system
 - [x] Dark/Light theme support
 - [x] Session persistence (localStorage + cookies)
 - [x] Toast notifications (sonner)
