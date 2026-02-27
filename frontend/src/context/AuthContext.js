@@ -76,6 +76,10 @@ export const AuthProvider = ({ children }) => {
     }
     
     const userData = await response.json();
+    // Store session token in localStorage for persistence
+    if (userData.session_token) {
+      setStoredToken(userData.session_token);
+    }
     setUser(userData);
     return userData;
   };
@@ -94,6 +98,10 @@ export const AuthProvider = ({ children }) => {
     }
     
     const userData = await response.json();
+    // Store session token in localStorage for persistence
+    if (userData.session_token) {
+      setStoredToken(userData.session_token);
+    }
     setUser(userData);
     return userData;
   };
