@@ -1,14 +1,17 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '../components/ui/dropdown-menu';
+import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
 import { toast } from 'sonner';
-import { apiGet, apiPost, apiPatch, apiDelete } from '../utils/api';
+import { apiGet, apiPost, apiPatch, apiDelete, apiCall } from '../utils/api';
 import CardDetailModal from '../components/CardDetailModal';
 import { 
   Plus, 
@@ -20,13 +23,17 @@ import {
   Trash2,
   Edit2,
   X,
-  GripVertical,
   Calendar,
-  Tag,
-  CheckSquare
+  CheckSquare,
+  Users,
+  UserPlus,
+  Image,
+  Palette,
+  Bell
 } from 'lucide-react';
 
 const LOGO_URL = "https://customer-assets.emergentagent.com/job_27d48b6b-dd80-4045-b25e-4aeef47ff911/artifacts/8ilbqloe_download.png";
+const API_BASE = process.env.REACT_APP_BACKEND_URL;
 
 const LABEL_COLORS = {
   red: 'bg-red-500',
@@ -37,6 +44,11 @@ const LABEL_COLORS = {
   purple: 'bg-purple-500',
   pink: 'bg-pink-500'
 };
+
+const BOARD_COLORS = [
+  '#3A8B84', '#E67E4C', '#6366F1', '#EC4899', '#14B8A6', '#F59E0B', '#8B5CF6', '#06B6D4',
+  '#EF4444', '#22C55E', '#3B82F6', '#A855F7', '#F97316', '#84CC16'
+];
 
 export default function BoardPage() {
   const { boardId } = useParams();
