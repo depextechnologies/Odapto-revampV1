@@ -215,6 +215,7 @@ export default function DashboardPage() {
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Create Workspace</DialogTitle>
+                <DialogDescription>Create a new workspace to organize your boards and projects.</DialogDescription>
               </DialogHeader>
               <form onSubmit={createWorkspace} className="space-y-4 mt-4">
                 <div className="space-y-2">
