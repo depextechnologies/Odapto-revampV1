@@ -14,6 +14,8 @@ class OdaptoAPITester:
         self.tests_run = 0
         self.tests_passed = 0
         self.failed_tests = []
+        # Use session to maintain cookies
+        self.session = requests.Session()
 
     def log_test(self, name, success, details=""):
         """Log test result"""
