@@ -101,6 +101,122 @@ export default function BoardPage() {
     fetchBoard();
   }, [fetchBoard]);
 
+  // Fetch board members
+  useEffect(() => {
+    const fetchMembers = async () => {
+      if (!boardId) return;
+      try {
+        const response = await apiGet(`/boards/${boardId}/members`);
+        if (response.ok) {
+          setBoardMembers(await response.json());
+        }
+      } catch (error) {
+        console.error('Failed to fetch members:', error);
+      }
+    };
+    fetchMembers();
+  }, [boardId]);
+
+  // Invite member
+  const inviteMember = async (e) => {
+    e.preventDefault();
+    if (!inviteEmail.trim()) return;
+    
+    setInviting(true);
+    try {
+      const response = await apiPost(`/boards/${boardId}/invite`, {
+        email: inviteEmail,
+        role: inviteRole
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        toast.success(result.message);
+        setInviteEmail('');
+        setShowInviteDialog(false);
+        // Refresh members
+        const membersRes = await apiGet(`/boards/${boardId}/members`);
+        if (membersRes.ok) {
+          setBoardMembers(await membersRes.json());
+        }
+      } else {
+        const error = await response.json();
+        toast.error(error.detail || 'Failed to invite member');
+      }
+    } catch (error) {
+      console.error('Failed to invite member:', error);
+      toast.error('Failed to invite member');
+    } finally {
+      setInviting(false);
+    }
+  };
+
+  // Remove member
+  const removeMember = async (memberUserId) => {
+    if (!window.confirm('Remove this member from the board?')) return;
+    
+    try {
+      const response = await apiDelete(`/boards/${boardId}/members/${memberUserId}`);
+      if (response.ok) {
+        setBoardMembers(boardMembers.filter(m => m.user_id !== memberUserId));
+        toast.success('Member removed');
+      } else {
+        toast.error('Failed to remove member');
+      }
+    } catch (error) {
+      console.error('Failed to remove member:', error);
+    }
+  };
+
+  // Change board background color
+  const changeBackgroundColor = async (color) => {
+    try {
+      const response = await apiPatch(`/boards/${boardId}`, {
+        background: color,
+        background_type: 'color'
+      });
+      if (response.ok) {
+        setBoard({ ...board, background: color, background_type: 'color' });
+        toast.success('Background updated');
+      }
+    } catch (error) {
+      console.error('Failed to update background:', error);
+    }
+    setShowBackgroundPicker(false);
+  };
+
+  // Upload background image
+  const handleBackgroundUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    setUploadingBackground(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const response = await apiCall(`/boards/${boardId}/background`, {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        setBoard({ ...board, background: result.background, background_type: 'image' });
+        toast.success('Background image uploaded');
+      } else {
+        const error = await response.json();
+        toast.error(error.detail || 'Failed to upload image');
+      }
+    } catch (error) {
+      console.error('Failed to upload background:', error);
+      toast.error('Failed to upload background image');
+    } finally {
+      setUploadingBackground(false);
+      setShowBackgroundPicker(false);
+    }
+  };
+
   const handleDragEnd = async (result) => {
     const { destination, source, draggableId, type } = result;
 
