@@ -217,6 +217,7 @@ export default function WorkspacePage() {
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Create Board</DialogTitle>
+                  <DialogDescription>Create a new board to organize your tasks.</DialogDescription>
                 </DialogHeader>
                 <form onSubmit={createBoard} className="space-y-4 mt-4">
                   <div className="space-y-2">
