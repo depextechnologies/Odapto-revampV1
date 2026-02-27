@@ -383,11 +383,30 @@ export default function BoardPage() {
     );
   }
 
+  // Determine background style
+  const backgroundStyle = board?.background_type === 'image' && board?.background
+    ? {
+        backgroundImage: `url(${API_BASE}${board.background})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat'
+      }
+    : { backgroundColor: board?.background || '#3A8B84' };
+
   return (
     <div 
       className="min-h-screen flex flex-col"
-      style={{ backgroundColor: board?.background || '#3A8B84' }}
+      style={backgroundStyle}
     >
+      {/* Hidden file input for background upload */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleBackgroundUpload}
+        accept="image/*"
+        className="hidden"
+      />
+
       {/* Top Navigation */}
       <nav className="sticky top-0 z-50 bg-black/20 backdrop-blur-lg border-b border-white/10">
         <div className="px-4">
@@ -402,7 +421,116 @@ export default function BoardPage() {
               <h1 className="font-heading text-xl font-semibold text-white">{board?.name}</h1>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              {/* Board Members */}
+              <Popover open={showMembersPopover} onOpenChange={setShowMembersPopover}>
+                <PopoverTrigger asChild>
+                  <button 
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
+                    data-testid="board-members-btn"
+                  >
+                    <Users className="w-4 h-4" />
+                    <span className="text-sm">{boardMembers.length}</span>
+                    <div className="flex -space-x-2">
+                      {boardMembers.slice(0, 3).map((member) => (
+                        <Avatar key={member.user_id} className="h-6 w-6 border border-white/30">
+                          <AvatarImage src={member.picture} />
+                          <AvatarFallback className="bg-odapto-teal text-white text-xs">
+                            {getInitials(member.name)}
+                          </AvatarFallback>
+                        </Avatar>
+                      ))}
+                    </div>
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-72">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-semibold">Board Members</h4>
+                      <Button 
+                        size="sm" 
+                        onClick={() => { setShowMembersPopover(false); setShowInviteDialog(true); }}
+                        className="bg-odapto-orange hover:bg-odapto-orange-hover text-white"
+                        data-testid="invite-member-btn"
+                      >
+                        <UserPlus className="w-4 h-4 mr-1" />
+                        Invite
+                      </Button>
+                    </div>
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                      {boardMembers.map((member) => (
+                        <div key={member.user_id} className="flex items-center justify-between p-2 rounded-lg hover:bg-muted">
+                          <div className="flex items-center gap-2">
+                            <Avatar className="h-8 w-8">
+                              <AvatarImage src={member.picture} />
+                              <AvatarFallback className="bg-odapto-teal text-white text-sm">
+                                {getInitials(member.name)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <p className="text-sm font-medium">{member.name}</p>
+                              <p className="text-xs text-muted-foreground capitalize">{member.role}</p>
+                            </div>
+                          </div>
+                          {board?.created_by === user?.user_id && member.user_id !== user?.user_id && (
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => removeMember(member.user_id)}
+                              className="text-destructive hover:bg-destructive/10"
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
+
+              {/* Background Picker */}
+              <Popover open={showBackgroundPicker} onOpenChange={setShowBackgroundPicker}>
+                <PopoverTrigger asChild>
+                  <button 
+                    className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
+                    data-testid="background-picker-btn"
+                  >
+                    <Palette className="w-5 h-5" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-64">
+                  <div className="space-y-3">
+                    <h4 className="font-semibold">Board Background</h4>
+                    <div>
+                      <p className="text-sm text-muted-foreground mb-2">Colors</p>
+                      <div className="grid grid-cols-7 gap-1">
+                        {BOARD_COLORS.map((color) => (
+                          <button
+                            key={color}
+                            onClick={() => changeBackgroundColor(color)}
+                            className={`w-7 h-7 rounded ${board?.background === color && board?.background_type === 'color' ? 'ring-2 ring-offset-2 ring-foreground' : ''}`}
+                            style={{ backgroundColor: color }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground mb-2">Custom Image</p>
+                      <Button 
+                        variant="outline" 
+                        className="w-full"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploadingBackground}
+                      >
+                        <Image className="w-4 h-4 mr-2" />
+                        {uploadingBackground ? 'Uploading...' : 'Upload Image'}
+                      </Button>
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
+
               <button
                 onClick={toggleTheme}
                 className="p-2 rounded-full hover:bg-white/10 transition-colors text-white"
