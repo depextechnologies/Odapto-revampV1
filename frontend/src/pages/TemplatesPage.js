@@ -91,14 +91,9 @@ export default function TemplatesPage() {
 
     setCreating(true);
     try {
-      const response = await fetch(`${API}/templates/${selectedTemplate.board_id}/use`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          workspace_id: selectedWorkspace,
-          board_name: newBoardName
-        })
+      const response = await apiPost(`/templates/${selectedTemplate.board_id}/use`, {
+        workspace_id: selectedWorkspace,
+        board_name: newBoardName
       });
 
       if (response.ok) {
