@@ -615,6 +615,8 @@ async def create_board(workspace_id: str, data: BoardCreate, user: User = Depend
         "name": data.name,
         "description": data.description,
         "background": data.background or "#3A8B84",
+        "background_type": data.background_type or "color",
+        "members": [{"user_id": user.user_id, "role": "owner", "joined_at": datetime.now(timezone.utc).isoformat()}],
         "is_template": False,
         "template_name": None,
         "template_description": None,
