@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -6,7 +6,11 @@ const AuthContext = createContext(null);
 
 // Helper to get stored token from localStorage
 const getStoredToken = () => localStorage.getItem('odapto_session_token');
-const setStoredToken = (token) => localStorage.setItem('odapto_session_token', token);
+const setStoredToken = (token) => {
+  if (token) {
+    localStorage.setItem('odapto_session_token', token);
+  }
+};
 const clearStoredToken = () => localStorage.removeItem('odapto_session_token');
 
 export const useAuth = () => {
@@ -20,14 +24,25 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [sessionToken, setSessionToken] = useState(() => getStoredToken());
+
+  // Update token state and storage together
+  const updateToken = useCallback((token) => {
+    setSessionToken(token);
+    if (token) {
+      setStoredToken(token);
+    } else {
+      clearStoredToken();
+    }
+  }, []);
 
   const getAuthHeaders = useCallback(() => {
-    const token = getStoredToken();
+    const token = sessionToken || getStoredToken();
     if (token) {
       return { 'Authorization': `Bearer ${token}` };
     }
     return {};
-  }, []);
+  }, [sessionToken]);
 
   const checkAuth = useCallback(async () => {
     // CRITICAL: If returning from OAuth callback, skip the /me check.
@@ -37,26 +52,38 @@ export const AuthProvider = ({ children }) => {
       return;
     }
 
+    // Get token from state or localStorage
+    const token = sessionToken || getStoredToken();
+    
+    // If no token, user is not authenticated
+    if (!token) {
+      setUser(null);
+      setLoading(false);
+      return;
+    }
+
     try {
       const response = await fetch(`${API}/auth/me`, {
         credentials: 'include',
-        headers: getAuthHeaders()
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       });
       if (response.ok) {
         const userData = await response.json();
         setUser(userData);
       } else {
         setUser(null);
-        clearStoredToken();
+        updateToken(null);
       }
     } catch (error) {
       console.error('Auth check failed:', error);
       setUser(null);
-      clearStoredToken();
+      updateToken(null);
     } finally {
       setLoading(false);
     }
-  }, [getAuthHeaders]);
+  }, [sessionToken, updateToken]);
 
   useEffect(() => {
     checkAuth();
@@ -76,9 +103,9 @@ export const AuthProvider = ({ children }) => {
     }
     
     const userData = await response.json();
-    // Store session token in localStorage for persistence
+    // Store session token for persistence
     if (userData.session_token) {
-      setStoredToken(userData.session_token);
+      updateToken(userData.session_token);
     }
     setUser(userData);
     return userData;
@@ -98,9 +125,9 @@ export const AuthProvider = ({ children }) => {
     }
     
     const userData = await response.json();
-    // Store session token in localStorage for persistence
+    // Store session token for persistence
     if (userData.session_token) {
-      setStoredToken(userData.session_token);
+      updateToken(userData.session_token);
     }
     setUser(userData);
     return userData;
@@ -125,29 +152,30 @@ export const AuthProvider = ({ children }) => {
     }
     
     const userData = await response.json();
-    // Store session token in localStorage for persistence
+    // Store session token for persistence
     if (userData.session_token) {
-      setStoredToken(userData.session_token);
+      updateToken(userData.session_token);
     }
     setUser(userData);
     return userData;
   };
 
   const logout = async () => {
+    const token = sessionToken || getStoredToken();
     try {
       await fetch(`${API}/auth/logout`, {
         method: 'POST',
         credentials: 'include',
-        headers: getAuthHeaders()
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
       });
     } catch (error) {
       console.error('Logout error:', error);
     }
     setUser(null);
-    clearStoredToken();
+    updateToken(null);
   };
 
-  const value = {
+  const value = useMemo(() => ({
     user,
     loading,
     login,
@@ -160,7 +188,7 @@ export const AuthProvider = ({ children }) => {
     isAuthenticated: !!user,
     isAdmin: user?.role === 'admin',
     isPrivileged: user?.role === 'admin' || user?.role === 'privileged'
-  };
+  }), [user, loading, checkAuth, getAuthHeaders]);
 
   return (
     <AuthContext.Provider value={value}>
