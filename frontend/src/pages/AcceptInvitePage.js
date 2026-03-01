@@ -30,11 +30,10 @@ const AcceptInvitePage = () => {
     const fetchInvitation = async () => {
       try {
         const response = await apiGet(`/invitations/${token}`);
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.detail || 'Failed to load invitation');
-        }
         const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.detail || 'Failed to load invitation');
+        }
         setInvitation(data);
         setError(null);
       } catch (err) {
