@@ -99,6 +99,7 @@ const AppRouter = () => {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/templates" element={<TemplatesPage />} />
+      <Route path="/invite/accept" element={<AcceptInvitePage />} />
       <Route
         path="/dashboard"
         element={
