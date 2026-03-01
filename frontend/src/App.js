@@ -14,6 +14,7 @@ import BoardPage from './pages/BoardPage';
 import TemplatesPage from './pages/TemplatesPage';
 import AdminPage from './pages/AdminPage';
 import ProfilePage from './pages/ProfilePage';
+import AcceptInvitePage from './pages/AcceptInvitePage';
 
 // Auth callback component
 const AuthCallback = () => {
