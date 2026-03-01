@@ -2133,6 +2133,14 @@ async def get_analytics(admin: User = Depends(require_admin)):
         {"_id": 0}
     ).sort("created_at", -1).limit(10).to_list(10)
     
+    # Email statistics
+    total_emails = await db.email_logs.count_documents({})
+    successful_emails = await db.email_logs.count_documents({"success": True})
+    failed_emails = await db.email_logs.count_documents({"success": False})
+    
+    # Pending invitations
+    pending_invites = await db.invitation_tokens.count_documents({"used": False})
+    
     return {
         "totals": {
             "users": total_users,
@@ -2147,8 +2155,47 @@ async def get_analytics(admin: User = Depends(require_admin)):
             "normal": normal_count
         },
         "template_usage_count": len(template_usage),
-        "recent_boards": recent_boards
+        "recent_boards": recent_boards,
+        "email_stats": {
+            "total": total_emails,
+            "successful": successful_emails,
+            "failed": failed_emails
+        },
+        "pending_invites": pending_invites
     }
+
+@api_router.get("/admin/email-logs")
+async def get_email_logs(admin: User = Depends(require_admin), limit: int = 50, skip: int = 0, success_only: bool = None):
+    """Get email send logs for admin monitoring"""
+    query = {}
+    if success_only is not None:
+        query["success"] = success_only
+    
+    logs = await db.email_logs.find(query, {"_id": 0}).sort("sent_at", -1).skip(skip).limit(limit).to_list(limit)
+    total = await db.email_logs.count_documents(query)
+    
+    return {
+        "logs": logs,
+        "total": total,
+        "limit": limit,
+        "skip": skip
+    }
+
+@api_router.get("/admin/pending-invitations")
+async def get_pending_invitations(admin: User = Depends(require_admin)):
+    """Get all pending invitation tokens"""
+    invitations = await db.invitation_tokens.find(
+        {"used": False},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+    
+    # Mark expired ones
+    now = datetime.now(timezone.utc)
+    for inv in invitations:
+        expires_at = datetime.fromisoformat(inv["expires_at"].replace('Z', '+00:00'))
+        inv["is_expired"] = now > expires_at
+    
+    return {"invitations": invitations}
 
 # ============== WEBSOCKET FOR REAL-TIME ==============
 
