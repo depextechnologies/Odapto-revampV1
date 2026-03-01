@@ -1339,7 +1339,7 @@ async def move_card(card_id: str, request: Request, user: User = Depends(get_cur
 # Card member invitation
 @api_router.post("/cards/{card_id}/invite")
 async def invite_card_member(card_id: str, data: CardInviteRequest, user: User = Depends(get_current_user)):
-    """Invite a user to be assigned to a card. If not registered, creates a pending invite."""
+    """Invite a user to be assigned to a card. Sends email if user not registered."""
     card = await db.cards.find_one({"card_id": card_id}, {"_id": 0})
     if not card:
         raise HTTPException(status_code=404, detail="Card not found")
@@ -1391,30 +1391,81 @@ async def invite_card_member(card_id: str, data: CardInviteRequest, user: User =
         })
         
         return {"message": f"Added {invite_user['name']} to the card", "member": new_member, "pending": False}
-    else:
-        # User doesn't exist - create pending invite
-        invite_id = f"invite_{uuid.uuid4().hex[:12]}"
-        pending_invite = {
-            "invite_id": invite_id,
-            "email": data.email,
-            "invite_type": "card",
-            "target_id": card_id,
-            "board_id": board["board_id"],
-            "board_name": board["name"],
-            "card_title": card["title"],
-            "invited_by": user.user_id,
-            "invited_by_name": user.name,
-            "created_at": datetime.now(timezone.utc).isoformat()
-        }
-        await db.pending_invites.insert_one(pending_invite)
-        
-        # In a real app, send email here
-        # For now, just return success
+    
+    # User doesn't exist - create invitation token and send email
+    token = secrets.token_urlsafe(32)
+    invitation_doc = {
+        "token": token,
+        "email": data.email,
+        "invitation_type": "card",
+        "target_id": card_id,
+        "role": None,
+        "invited_by": user.user_id,
+        "invited_by_name": user.name,
+        "target_name": card["title"],
+        "board_id": board["board_id"],
+        "used": False,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "expires_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+    }
+    await db.invitation_tokens.insert_one(invitation_doc)
+    
+    # Also create pending invite for auto-add on registration
+    pending_invite = {
+        "invite_id": f"invite_{uuid.uuid4().hex[:12]}",
+        "email": data.email,
+        "invite_type": "card",
+        "target_id": card_id,
+        "board_id": board["board_id"],
+        "board_name": board["name"],
+        "card_title": card["title"],
+        "invited_by": user.user_id,
+        "invited_by_name": user.name,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.pending_invites.insert_one(pending_invite)
+    
+    # Generate invitation link
+    frontend_url = os.environ.get('FRONTEND_URL', 'https://collab-cards.preview.emergentagent.com')
+    invitation_link = f"{frontend_url}/invite/accept?token={token}"
+    
+    # Send email
+    email_result = await send_card_invitation_email(
+        to_email=data.email,
+        inviter_name=user.name,
+        card_title=card["title"],
+        board_name=board["name"],
+        invitation_link=invitation_link
+    )
+    
+    # Log email attempt
+    email_log = {
+        "log_id": f"email_{uuid.uuid4().hex[:12]}",
+        "to_email": data.email,
+        "subject": f"[Odapto] {user.name} assigned you to: {card['title']}",
+        "email_type": "card_invite",
+        "success": email_result.get("success", False),
+        "error": email_result.get("error"),
+        "invitation_token": token,
+        "sent_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.email_logs.insert_one(email_log)
+    
+    if not email_result.get("success"):
+        logger.error(f"Failed to send card invitation email to {data.email}: {email_result.get('error')}")
         return {
-            "message": f"Invitation sent to {data.email}. They will be added once they sign up.",
+            "message": f"Invitation created but email delivery failed. Share this link with them.",
             "pending": True,
-            "email": data.email
+            "email": data.email,
+            "invitation_link": invitation_link,
+            "email_error": email_result.get("error")
         }
+    
+    return {
+        "message": f"Invitation email sent to {data.email}. They will be added once they sign up.",
+        "pending": True,
+        "email": data.email
+    }
 
 @api_router.delete("/cards/{card_id}/members/{member_user_id}")
 async def remove_card_member(card_id: str, member_user_id: str, user: User = Depends(get_current_user)):
