@@ -892,7 +892,7 @@ async def delete_board(board_id: str, user: User = Depends(get_current_user)):
 
 @api_router.post("/boards/{board_id}/invite")
 async def invite_board_member(board_id: str, data: BoardInviteRequest, user: User = Depends(get_current_user)):
-    """Invite a user to collaborate on a board"""
+    """Invite a user to collaborate on a board - sends email if user not registered"""
     board = await db.boards.find_one({"board_id": board_id}, {"_id": 0})
     if not board:
         raise HTTPException(status_code=404, detail="Board not found")
@@ -906,48 +906,107 @@ async def invite_board_member(board_id: str, data: BoardInviteRequest, user: Use
     
     # Find the user to invite
     invite_user = await db.users.find_one({"email": data.email}, {"_id": 0, "password_hash": 0})
-    if not invite_user:
-        raise HTTPException(status_code=404, detail="User not found. They need to register first.")
     
-    # Check if already a member
-    if any(m.get("user_id") == invite_user["user_id"] for m in board.get("members", [])):
-        raise HTTPException(status_code=400, detail="User is already a board member")
+    if invite_user:
+        # Check if already a member
+        if any(m.get("user_id") == invite_user["user_id"] for m in board.get("members", [])):
+            raise HTTPException(status_code=400, detail="User is already a board member")
+        
+        # Add to board members directly
+        new_member = {
+            "user_id": invite_user["user_id"],
+            "role": data.role,
+            "joined_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.boards.update_one(
+            {"board_id": board_id},
+            {"$push": {"members": new_member}}
+        )
+        
+        # Create notification for the invited user
+        notification = {
+            "notification_id": f"notif_{uuid.uuid4().hex[:12]}",
+            "user_id": invite_user["user_id"],
+            "type": "board_invite",
+            "title": "Board Invitation",
+            "message": f"{user.name} invited you to collaborate on '{board['name']}'",
+            "board_id": board_id,
+            "card_id": None,
+            "from_user_id": user.user_id,
+            "from_user_name": user.name,
+            "read": False,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.notifications.insert_one(notification)
+        
+        # Broadcast to WebSocket
+        await manager.broadcast(board_id, {
+            "type": "member_joined",
+            "user": {"user_id": invite_user["user_id"], "name": invite_user["name"], "email": invite_user["email"]},
+            "role": data.role
+        })
+        
+        return {"message": f"Invited {invite_user['name']} to the board", "member": new_member, "pending": False}
     
-    # Add to board members
-    new_member = {
-        "user_id": invite_user["user_id"],
+    # User doesn't exist - create invitation token and send email
+    token = secrets.token_urlsafe(32)
+    invitation_doc = {
+        "token": token,
+        "email": data.email,
+        "invitation_type": "board",
+        "target_id": board_id,
         "role": data.role,
-        "joined_at": datetime.now(timezone.utc).isoformat()
+        "invited_by": user.user_id,
+        "invited_by_name": user.name,
+        "target_name": board["name"],
+        "board_id": board_id,
+        "used": False,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "expires_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
     }
-    await db.boards.update_one(
-        {"board_id": board_id},
-        {"$push": {"members": new_member}}
+    await db.invitation_tokens.insert_one(invitation_doc)
+    
+    # Generate invitation link
+    frontend_url = os.environ.get('FRONTEND_URL', 'https://collab-cards.preview.emergentagent.com')
+    invitation_link = f"{frontend_url}/invite/accept?token={token}"
+    
+    # Send email
+    email_result = await send_board_invitation_email(
+        to_email=data.email,
+        inviter_name=user.name,
+        board_name=board["name"],
+        role=data.role,
+        invitation_link=invitation_link
     )
     
-    # Create notification for the invited user
-    notification = {
-        "notification_id": f"notif_{uuid.uuid4().hex[:12]}",
-        "user_id": invite_user["user_id"],
-        "type": "board_invite",
-        "title": "Board Invitation",
-        "message": f"{user.name} invited you to collaborate on '{board['name']}'",
-        "board_id": board_id,
-        "card_id": None,
-        "from_user_id": user.user_id,
-        "from_user_name": user.name,
-        "read": False,
-        "created_at": datetime.now(timezone.utc).isoformat()
+    # Log email attempt
+    email_log = {
+        "log_id": f"email_{uuid.uuid4().hex[:12]}",
+        "to_email": data.email,
+        "subject": f"[Odapto] {user.name} invited you to collaborate on {board['name']}",
+        "email_type": "board_invite",
+        "success": email_result.get("success", False),
+        "error": email_result.get("error"),
+        "invitation_token": token,
+        "sent_at": datetime.now(timezone.utc).isoformat()
     }
-    await db.notifications.insert_one(notification)
+    await db.email_logs.insert_one(email_log)
     
-    # Broadcast to WebSocket
-    await manager.broadcast(board_id, {
-        "type": "member_joined",
-        "user": {"user_id": invite_user["user_id"], "name": invite_user["name"], "email": invite_user["email"]},
-        "role": data.role
-    })
+    if not email_result.get("success"):
+        logger.error(f"Failed to send board invitation email to {data.email}: {email_result.get('error')}")
+        return {
+            "message": f"Invitation created but email delivery failed. Share this link with them.",
+            "pending": True,
+            "email": data.email,
+            "invitation_link": invitation_link,
+            "email_error": email_result.get("error")
+        }
     
-    return {"message": f"Invited {invite_user['name']} to the board", "member": new_member}
+    return {
+        "message": f"Invitation email sent to {data.email}",
+        "pending": True,
+        "email": data.email
+    }
 
 @api_router.delete("/boards/{board_id}/members/{member_user_id}")
 async def remove_board_member(board_id: str, member_user_id: str, user: User = Depends(get_current_user)):
