@@ -252,6 +252,36 @@ class PendingInvite(BaseModel):
     invited_by_name: str
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
+# Email Invitation Token model
+class InvitationToken(BaseModel):
+    token: str
+    email: str
+    invitation_type: str  # "workspace", "board", or "card"
+    target_id: str  # workspace_id, board_id, or card_id
+    role: Optional[str] = None  # For workspace/board invites
+    invited_by: str
+    invited_by_name: str
+    target_name: str  # Name of workspace/board/card
+    board_id: Optional[str] = None  # For card invites
+    used: bool = False
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    expires_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc) + timedelta(days=7))
+
+# Email send log model
+class EmailLog(BaseModel):
+    log_id: str
+    to_email: str
+    subject: str
+    email_type: str  # "workspace_invite", "board_invite", "card_invite"
+    success: bool
+    error: Optional[str] = None
+    invitation_token: Optional[str] = None
+    sent_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+# Invitation accept request
+class AcceptInvitationRequest(BaseModel):
+    token: str
+
 # ============== AUTH HELPERS ==============
 
 def hash_password(password: str) -> str:
