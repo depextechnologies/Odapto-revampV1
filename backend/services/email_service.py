@@ -215,6 +215,14 @@ def _send_email_sync(
 ) -> dict:
     """Synchronous email sending with retries"""
     
+    # Get SMTP config at runtime
+    smtp_config = get_smtp_config()
+    SMTP_HOST = smtp_config['host']
+    SMTP_PORT = smtp_config['port']
+    SMTP_USERNAME = smtp_config['username']
+    SMTP_PASSWORD = smtp_config['password']
+    SMTP_FROM_NAME = smtp_config['from_name']
+    
     if not SMTP_USERNAME or not SMTP_PASSWORD:
         logger.error("SMTP credentials not configured")
         return {
