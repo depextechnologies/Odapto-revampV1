@@ -9,10 +9,18 @@ from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
 from typing import List, Optional, Dict, Any
 import uuid
+import secrets
 from datetime import datetime, timezone, timedelta
 import bcrypt
 import httpx
 import json
+
+# Import email service
+from services.email_service import (
+    send_workspace_invitation_email,
+    send_board_invitation_email,
+    send_card_invitation_email
+)
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
