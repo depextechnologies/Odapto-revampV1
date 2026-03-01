@@ -115,7 +115,7 @@ const AcceptInvitePage = () => {
     );
   }
 
-  if (error) {
+  if (error || !invitation) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-muted/30 p-4">
         <Card className="w-full max-w-md">
@@ -124,7 +124,7 @@ const AcceptInvitePage = () => {
               <AlertCircle className="w-8 h-8 text-red-500" />
             </div>
             <CardTitle className="text-xl">Invitation Error</CardTitle>
-            <CardDescription className="text-base">{error}</CardDescription>
+            <CardDescription className="text-base">{error || 'Unable to load invitation details'}</CardDescription>
           </CardHeader>
           <CardContent className="flex justify-center">
             <Link to="/dashboard">
