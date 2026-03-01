@@ -648,6 +648,7 @@ async def delete_workspace(workspace_id: str, user: User = Depends(get_current_u
 
 @api_router.post("/workspaces/{workspace_id}/members")
 async def add_workspace_member(workspace_id: str, request: Request, user: User = Depends(get_current_user)):
+    """Add a member to workspace - sends email invitation if user not registered"""
     body = await request.json()
     member_email = body.get("email")
     member_role = body.get("role", "member")
@@ -659,21 +660,91 @@ async def add_workspace_member(workspace_id: str, request: Request, user: User =
     if workspace["owner_id"] != user.user_id:
         raise HTTPException(status_code=403, detail="Only owner can add members")
     
-    new_member = await db.users.find_one({"email": member_email}, {"_id": 0})
-    if not new_member:
-        raise HTTPException(status_code=404, detail="User not found")
+    # Check if user exists
+    existing_user = await db.users.find_one({"email": member_email}, {"_id": 0})
     
-    # Check if already member
-    for m in workspace.get("members", []):
-        if m["user_id"] == new_member["user_id"]:
-            raise HTTPException(status_code=400, detail="User already a member")
+    if existing_user:
+        # Check if already member
+        for m in workspace.get("members", []):
+            if m["user_id"] == existing_user["user_id"]:
+                raise HTTPException(status_code=400, detail="User already a member")
+        
+        # Add directly to workspace
+        await db.workspaces.update_one(
+            {"workspace_id": workspace_id},
+            {"$push": {"members": {"user_id": existing_user["user_id"], "role": member_role}}}
+        )
+        
+        # Create notification
+        await create_notification(
+            user_id=existing_user["user_id"],
+            notification_type="workspace_invite",
+            title="Workspace Invitation",
+            message=f"{user.name} added you to workspace '{workspace['name']}'",
+            from_user=user
+        )
+        
+        return {"message": f"Added {existing_user['name']} to workspace", "pending": False}
     
-    await db.workspaces.update_one(
-        {"workspace_id": workspace_id},
-        {"$push": {"members": {"user_id": new_member["user_id"], "role": member_role}}}
+    # User doesn't exist - create invitation token and send email
+    token = secrets.token_urlsafe(32)
+    invitation_doc = {
+        "token": token,
+        "email": member_email,
+        "invitation_type": "workspace",
+        "target_id": workspace_id,
+        "role": member_role,
+        "invited_by": user.user_id,
+        "invited_by_name": user.name,
+        "target_name": workspace["name"],
+        "board_id": None,
+        "used": False,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "expires_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+    }
+    await db.invitation_tokens.insert_one(invitation_doc)
+    
+    # Generate invitation link
+    frontend_url = os.environ.get('FRONTEND_URL', 'https://collab-cards.preview.emergentagent.com')
+    invitation_link = f"{frontend_url}/invite/accept?token={token}"
+    
+    # Send email
+    email_result = await send_workspace_invitation_email(
+        to_email=member_email,
+        inviter_name=user.name,
+        workspace_name=workspace["name"],
+        role=member_role,
+        invitation_link=invitation_link
     )
     
-    return {"message": "Member added"}
+    # Log email attempt
+    email_log = {
+        "log_id": f"email_{uuid.uuid4().hex[:12]}",
+        "to_email": member_email,
+        "subject": f"[Odapto] {user.name} invited you to {workspace['name']}",
+        "email_type": "workspace_invite",
+        "success": email_result.get("success", False),
+        "error": email_result.get("error"),
+        "invitation_token": token,
+        "sent_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.email_logs.insert_one(email_log)
+    
+    if not email_result.get("success"):
+        logger.error(f"Failed to send workspace invitation email to {member_email}: {email_result.get('error')}")
+        return {
+            "message": f"Invitation created but email delivery failed. The user can still join via invitation link.",
+            "pending": True,
+            "email": member_email,
+            "invitation_link": invitation_link,
+            "email_error": email_result.get("error")
+        }
+    
+    return {
+        "message": f"Invitation email sent to {member_email}",
+        "pending": True,
+        "email": member_email
+    }
 
 @api_router.delete("/workspaces/{workspace_id}/members/{member_user_id}")
 async def remove_workspace_member(workspace_id: str, member_user_id: str, user: User = Depends(get_current_user)):
