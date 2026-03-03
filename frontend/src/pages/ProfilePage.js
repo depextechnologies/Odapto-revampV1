@@ -1,26 +1,30 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import ReactCrop from 'react-image-crop';
+import 'react-image-crop/dist/ReactCrop.css';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { Button } from '../components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { toast } from 'sonner';
-import { 
-  Moon, 
-  Sun, 
-  ArrowLeft,
-  Mail,
-  Shield,
-  Calendar,
-  LogOut
-} from 'lucide-react';
+import { apiPost } from '../utils/api';
+import { Moon, Sun, ArrowLeft, Mail, Shield, Calendar, LogOut, Camera, Upload } from 'lucide-react';
 
 const LOGO_URL = "/odapto-logo-new.png";
 
 export default function ProfilePage() {
-  const { user, logout } = useAuth();
+  const { user, logout, checkAuth } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
+  const fileInputRef = useRef(null);
+  const imgRef = useRef(null);
+
+  const [showCropDialog, setShowCropDialog] = useState(false);
+  const [imageSrc, setImageSrc] = useState(null);
+  const [crop, setCrop] = useState({ unit: '%', width: 80, aspect: 1 });
+  const [completedCrop, setCompletedCrop] = useState(null);
+  const [uploading, setUploading] = useState(false);
 
   const handleLogout = async () => {
     await logout();
@@ -43,9 +47,93 @@ export default function ProfilePage() {
     }
   };
 
+  const onSelectFile = (e) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0];
+      if (file.size > 2 * 1024 * 1024) {
+        toast.error('Image must be less than 2MB');
+        return;
+      }
+      const reader = new FileReader();
+      reader.addEventListener('load', () => {
+        setImageSrc(reader.result);
+        setShowCropDialog(true);
+      });
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const onImageLoad = useCallback((e) => {
+    imgRef.current = e.currentTarget;
+    const { width, height } = e.currentTarget;
+    const size = Math.min(width, height, 300);
+    setCrop({
+      unit: 'px',
+      width: size,
+      height: size,
+      x: (width - size) / 2,
+      y: (height - size) / 2,
+    });
+  }, []);
+
+  const getCroppedImg = async () => {
+    if (!imgRef.current || !completedCrop) return null;
+
+    const canvas = document.createElement('canvas');
+    const scaleX = imgRef.current.naturalWidth / imgRef.current.width;
+    const scaleY = imgRef.current.naturalHeight / imgRef.current.height;
+    canvas.width = completedCrop.width;
+    canvas.height = completedCrop.height;
+    const ctx = canvas.getContext('2d');
+
+    ctx.drawImage(
+      imgRef.current,
+      completedCrop.x * scaleX,
+      completedCrop.y * scaleY,
+      completedCrop.width * scaleX,
+      completedCrop.height * scaleY,
+      0,
+      0,
+      completedCrop.width,
+      completedCrop.height
+    );
+
+    return new Promise((resolve) => {
+      canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.9);
+    });
+  };
+
+  const handleUpload = async () => {
+    setUploading(true);
+    try {
+      const blob = await getCroppedImg();
+      if (!blob) {
+        toast.error('Please select a crop area');
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('file', blob, 'profile.jpg');
+
+      const response = await apiPost('/auth/profile-photo', formData, true);
+      if (response.ok) {
+        toast.success('Profile photo updated!');
+        setShowCropDialog(false);
+        setImageSrc(null);
+        await checkAuth(); // Refresh user data
+      } else {
+        const error = await response.json();
+        toast.error(error.detail || 'Upload failed');
+      }
+    } catch (error) {
+      toast.error('Failed to upload photo');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
-      {/* Navigation */}
       <nav className="sticky top-0 z-50 bg-background/80 backdrop-blur-lg border-b border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
@@ -57,30 +145,40 @@ export default function ProfilePage() {
                 <img src={LOGO_URL} alt="Odapto" className="h-8 w-auto" />
               </Link>
             </div>
-
-            <button
-              onClick={toggleTheme}
-              className="p-2 rounded-full hover:bg-muted transition-colors"
-              data-testid="theme-toggle"
-            >
+            <button onClick={toggleTheme} className="p-2 rounded-full hover:bg-muted transition-colors" data-testid="theme-toggle">
               {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
           </div>
         </div>
       </nav>
 
-      {/* Main Content */}
       <main className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="bg-card rounded-2xl border border-border overflow-hidden">
-          {/* Header */}
           <div className="bg-gradient-to-br from-odapto-orange/20 to-odapto-teal/20 p-8">
             <div className="flex items-center gap-6">
-              <Avatar className="h-24 w-24 border-4 border-background shadow-lg">
-                <AvatarImage src={user?.picture} alt={user?.name} />
-                <AvatarFallback className="bg-odapto-orange text-white text-2xl">
-                  {getInitials(user?.name)}
-                </AvatarFallback>
-              </Avatar>
+              <div className="relative group">
+                <Avatar className="h-24 w-24 border-4 border-background shadow-lg">
+                  <AvatarImage src={user?.picture} alt={user?.name} />
+                  <AvatarFallback className="bg-odapto-orange text-white text-2xl">
+                    {getInitials(user?.name)}
+                  </AvatarFallback>
+                </Avatar>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                  data-testid="change-photo-btn"
+                >
+                  <Camera className="w-6 h-6 text-white" />
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={onSelectFile}
+                  className="hidden"
+                  data-testid="photo-input"
+                />
+              </div>
               <div>
                 <h1 className="font-heading text-2xl font-bold mb-2">{user?.name}</h1>
                 {getRoleBadge(user?.role)}
@@ -88,7 +186,6 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* Details */}
           <div className="p-8 space-y-6">
             <div className="grid gap-4">
               <div className="flex items-center gap-4 p-4 bg-muted rounded-lg">
@@ -122,7 +219,6 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* Role Permissions */}
             <div className="p-4 bg-muted rounded-lg">
               <h3 className="font-semibold mb-3">Your Permissions</h3>
               <ul className="space-y-2 text-sm">
@@ -150,16 +246,11 @@ export default function ProfilePage() {
                       <div className="w-2 h-2 rounded-full bg-odapto-orange" />
                       Manage template categories
                     </li>
-                    <li className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-odapto-orange" />
-                      View platform analytics
-                    </li>
                   </>
                 )}
               </ul>
             </div>
 
-            {/* Actions */}
             <div className="pt-4 border-t border-border">
               <Button 
                 variant="outline" 
@@ -174,6 +265,41 @@ export default function ProfilePage() {
           </div>
         </div>
       </main>
+
+      {/* Crop Dialog */}
+      <Dialog open={showCropDialog} onOpenChange={setShowCropDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Crop Profile Photo</DialogTitle>
+          </DialogHeader>
+          <div className="mt-4">
+            {imageSrc && (
+              <ReactCrop
+                crop={crop}
+                onChange={(c) => setCrop(c)}
+                onComplete={(c) => setCompletedCrop(c)}
+                aspect={1}
+                circularCrop
+              >
+                <img src={imageSrc} onLoad={onImageLoad} alt="Crop preview" style={{ maxHeight: '400px' }} />
+              </ReactCrop>
+            )}
+            <p className="text-xs text-muted-foreground mt-2">Drag to adjust the crop area. Max 2MB.</p>
+          </div>
+          <div className="flex justify-end gap-3 mt-4">
+            <Button variant="outline" onClick={() => setShowCropDialog(false)}>Cancel</Button>
+            <Button 
+              onClick={handleUpload} 
+              disabled={uploading}
+              className="bg-odapto-orange hover:bg-odapto-orange-hover text-white"
+              data-testid="upload-photo-btn"
+            >
+              <Upload className="w-4 h-4 mr-2" />
+              {uploading ? 'Uploading...' : 'Upload'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

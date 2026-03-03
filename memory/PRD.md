@@ -102,7 +102,7 @@ All P0 features completed.
   - [x] Template preview modal
 
 ### P2 (Medium Priority - Next)
-1. **Profile photo editing** - Upload, crop, 2MB limit
+1. **Profile photo editing** - Upload, crop, 2MB limit ✅ COMPLETED
 2. **Attachment previews** - Preview, download, set as cover
 3. Cloud integrations (Google Drive, OneDrive, Dropbox)
 4. Board export (JSON/CSV)

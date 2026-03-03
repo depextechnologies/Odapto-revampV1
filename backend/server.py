@@ -600,6 +600,41 @@ async def get_me(user: User = Depends(get_current_user)):
         "picture": user.picture
     }
 
+@api_router.post("/auth/profile-photo")
+async def upload_profile_photo(file: UploadFile = File(...), user: User = Depends(get_current_user)):
+    # Validate file size (2MB limit)
+    contents = await file.read()
+    if len(contents) > 2 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File size exceeds 2MB limit")
+    
+    # Validate file type
+    if not file.content_type or not file.content_type.startswith('image/'):
+        raise HTTPException(status_code=400, detail="Only image files are allowed")
+    
+    # Create uploads directory if needed
+    profile_dir = UPLOAD_DIR / "profiles"
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Generate unique filename
+    ext = file.filename.split('.')[-1] if '.' in file.filename else 'jpg'
+    filename = f"{user.user_id}_{uuid.uuid4().hex[:8]}.{ext}"
+    filepath = profile_dir / filename
+    
+    # Save file
+    with open(filepath, "wb") as f:
+        f.write(contents)
+    
+    # Generate URL
+    photo_url = f"/api/uploads/profiles/{filename}"
+    
+    # Update user in database
+    await db.users.update_one(
+        {"user_id": user.user_id},
+        {"$set": {"picture": photo_url}}
+    )
+    
+    return {"picture": photo_url}
+
 @api_router.post("/auth/logout")
 async def logout(request: Request, response: Response):
     # Check cookie first, then Authorization header
