@@ -5,11 +5,13 @@ import 'react-image-crop/dist/ReactCrop.css';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { toast } from 'sonner';
 import { apiPost } from '../utils/api';
-import { Moon, Sun, ArrowLeft, Mail, Shield, Calendar, LogOut, Camera, Upload } from 'lucide-react';
+import { Moon, Sun, ArrowLeft, Mail, Shield, Calendar, LogOut, Camera, Upload, Lock, Eye, EyeOff } from 'lucide-react';
 
 const LOGO_URL = "/odapto-logo-new.png";
 const API_BASE = process.env.REACT_APP_BACKEND_URL;
@@ -32,6 +34,15 @@ export default function ProfilePage() {
   const [crop, setCrop] = useState({ unit: '%', width: 80, aspect: 1 });
   const [completedCrop, setCompletedCrop] = useState(null);
   const [uploading, setUploading] = useState(false);
+
+  // Change password state
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPw, setShowCurrentPw] = useState(false);
+  const [showNewPw, setShowNewPw] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
 
   const handleLogout = async () => {
     await logout();
@@ -136,6 +147,40 @@ export default function ProfilePage() {
       toast.error('Failed to upload photo');
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    if (newPassword !== confirmPassword) {
+      toast.error('Passwords do not match');
+      return;
+    }
+    if (newPassword.length < 8) {
+      toast.error('Password must be at least 8 characters');
+      return;
+    }
+
+    setChangingPassword(true);
+    try {
+      const response = await apiPost('/auth/change-password', {
+        current_password: currentPassword,
+        new_password: newPassword
+      });
+      if (response.ok) {
+        toast.success('Password changed successfully!');
+        setShowPasswordDialog(false);
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+      } else {
+        const error = await response.json();
+        toast.error(error.detail || 'Failed to change password');
+      }
+    } catch (error) {
+      toast.error('Failed to change password');
+    } finally {
+      setChangingPassword(false);
     }
   };
 
@@ -258,7 +303,16 @@ export default function ProfilePage() {
               </ul>
             </div>
 
-            <div className="pt-4 border-t border-border">
+            <div className="pt-4 border-t border-border space-y-3">
+              <Button 
+                variant="outline" 
+                onClick={() => setShowPasswordDialog(true)}
+                className="w-full"
+                data-testid="change-password-btn"
+              >
+                <Lock className="w-4 h-4 mr-2" />
+                Change Password
+              </Button>
               <Button 
                 variant="outline" 
                 onClick={handleLogout}
@@ -305,6 +359,81 @@ export default function ProfilePage() {
               {uploading ? 'Uploading...' : 'Upload'}
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Change Password Dialog */}
+      <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Change Password</DialogTitle>
+            <DialogDescription>Enter your current password and choose a new one.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleChangePassword} className="space-y-4 mt-4">
+            <div className="space-y-2">
+              <Label htmlFor="current-password">Current Password</Label>
+              <div className="relative">
+                <Input
+                  id="current-password"
+                  type={showCurrentPw ? 'text' : 'password'}
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  required
+                  data-testid="current-password-input"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCurrentPw(!showCurrentPw)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                >
+                  {showCurrentPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-password">New Password</Label>
+              <div className="relative">
+                <Input
+                  id="new-password"
+                  type={showNewPw ? 'text' : 'password'}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  required
+                  minLength={8}
+                  data-testid="new-password-input"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPw(!showNewPw)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                >
+                  {showNewPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirm-password">Confirm New Password</Label>
+              <Input
+                id="confirm-password"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                data-testid="confirm-password-input"
+              />
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <Button type="button" variant="outline" onClick={() => setShowPasswordDialog(false)}>Cancel</Button>
+              <Button
+                type="submit"
+                disabled={changingPassword}
+                className="bg-odapto-orange hover:bg-odapto-orange-hover text-white"
+                data-testid="change-password-submit-btn"
+              >
+                {changingPassword ? 'Changing...' : 'Change Password'}
+              </Button>
+            </div>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

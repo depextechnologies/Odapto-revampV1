@@ -357,3 +357,35 @@ async def send_card_invitation_email(
         subject=f"[Odapto] {inviter_name} assigned you to: {card_title}",
         html_content=html
     )
+
+
+def get_password_reset_content(user_name: str, reset_link: str) -> str:
+    """Generate password reset email content"""
+    return f"""
+    <h2 style="color: {BRAND_DARK}; margin: 0 0 20px 0; font-size: 24px;">Reset Your Password</h2>
+    <p style="color: #666; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
+        Hi {user_name},
+    </p>
+    <p style="color: #666; font-size: 16px; line-height: 1.6; margin: 0 0 30px 0;">
+        We received a request to reset your password. Click the button below to create a new password:
+    </p>
+    <div style="text-align: center; margin: 30px 0;">
+        <a href="{reset_link}" style="display: inline-block; padding: 14px 32px; background-color: {BRAND_ORANGE}; color: white; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
+            Reset Password
+        </a>
+    </div>
+    <p style="color: #999; font-size: 14px; line-height: 1.6; margin: 20px 0 0 0;">
+        This link will expire in 1 hour. If you didn't request this, you can safely ignore this email.
+    </p>
+    """
+
+
+async def send_password_reset_email(to_email: str, user_name: str, reset_link: str) -> dict:
+    """Send password reset email"""
+    content = get_password_reset_content(user_name, reset_link)
+    html = get_email_template(content, "Reset Your Password")
+    return await send_email(
+        to_email=to_email,
+        subject="[Odapto] Reset Your Password",
+        html_content=html
+    )

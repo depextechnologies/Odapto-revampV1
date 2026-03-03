@@ -635,6 +635,110 @@ async def upload_profile_photo(file: UploadFile = File(...), user: User = Depend
     
     return {"picture": photo_url}
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+@api_router.post("/auth/change-password")
+async def change_password(data: ChangePasswordRequest, user: User = Depends(get_current_user)):
+    # Get user with password hash
+    user_doc = await db.users.find_one({"user_id": user.user_id})
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Check if user has a password (not OAuth-only)
+    if not user_doc.get("password_hash"):
+        raise HTTPException(status_code=400, detail="Cannot change password for OAuth accounts")
+    
+    # Verify current password
+    if not verify_password(data.current_password, user_doc["password_hash"]):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    
+    # Validate new password
+    if len(data.new_password) < 8:
+        raise HTTPException(status_code=400, detail="New password must be at least 8 characters")
+    
+    # Update password
+    new_hash = hash_password(data.new_password)
+    await db.users.update_one(
+        {"user_id": user.user_id},
+        {"$set": {"password_hash": new_hash}}
+    )
+    
+    return {"message": "Password changed successfully"}
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+@api_router.post("/auth/forgot-password")
+async def forgot_password(data: ForgotPasswordRequest):
+    user = await db.users.find_one({"email": data.email})
+    if not user:
+        # Don't reveal if email exists
+        return {"message": "If the email exists, a reset link has been sent"}
+    
+    # Generate reset token
+    reset_token = secrets.token_urlsafe(32)
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
+    
+    await db.password_resets.insert_one({
+        "token": reset_token,
+        "user_id": user["user_id"],
+        "email": data.email,
+        "expires_at": expires_at.isoformat(),
+        "used": False
+    })
+    
+    # Send email with reset link
+    reset_link = f"{os.environ.get('FRONTEND_URL', 'https://task-sync-hub-16.preview.emergentagent.com')}/reset-password?token={reset_token}"
+    
+    try:
+        from services.email_service import send_password_reset_email
+        await send_password_reset_email(data.email, user.get("name", "User"), reset_link)
+    except Exception as e:
+        logger.error(f"Failed to send reset email: {e}")
+    
+    return {"message": "If the email exists, a reset link has been sent"}
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+@api_router.post("/auth/reset-password")
+async def reset_password(data: ResetPasswordRequest):
+    # Find valid token
+    reset_doc = await db.password_resets.find_one({
+        "token": data.token,
+        "used": False
+    })
+    
+    if not reset_doc:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset link")
+    
+    # Check expiration
+    expires_at = datetime.fromisoformat(reset_doc["expires_at"].replace('Z', '+00:00'))
+    if datetime.now(timezone.utc) > expires_at:
+        raise HTTPException(status_code=400, detail="Reset link has expired")
+    
+    # Validate new password
+    if len(data.new_password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    
+    # Update password
+    new_hash = hash_password(data.new_password)
+    await db.users.update_one(
+        {"user_id": reset_doc["user_id"]},
+        {"$set": {"password_hash": new_hash}}
+    )
+    
+    # Mark token as used
+    await db.password_resets.update_one(
+        {"token": data.token},
+        {"$set": {"used": True}}
+    )
+    
+    return {"message": "Password reset successfully"}
+
 @api_router.post("/auth/logout")
 async def logout(request: Request, response: Response):
     # Check cookie first, then Authorization header
