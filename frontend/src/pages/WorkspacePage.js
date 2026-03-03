@@ -1,16 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
+import { Textarea } from '../components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '../components/ui/dialog';
 import { Label } from '../components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '../components/ui/dropdown-menu';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { toast } from 'sonner';
-import { apiGet, apiPost, apiDelete } from '../utils/api';
+import { apiGet, apiPost, apiDelete, apiPatch } from '../utils/api';
 import { 
   Plus, 
   LayoutGrid, 
@@ -25,7 +28,11 @@ import {
   MoreVertical,
   List,
   Square,
-  Paperclip
+  Paperclip,
+  UserPlus,
+  Briefcase,
+  FolderHeart,
+  Mail
 } from 'lucide-react';
 
 const LOGO_URL = "/odapto-logo-new.png";
@@ -42,11 +49,17 @@ export default function WorkspacePage() {
   
   const [workspace, setWorkspace] = useState(null);
   const [boards, setBoards] = useState([]);
+  const [teams, setTeams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [createTeamDialogOpen, setCreateTeamDialogOpen] = useState(false);
   const [newBoardName, setNewBoardName] = useState('');
   const [newBoardColor, setNewBoardColor] = useState(BOARD_COLORS[0]);
+  const [newBoardTeamId, setNewBoardTeamId] = useState('');
+  const [newTeamName, setNewTeamName] = useState('');
+  const [newTeamDescription, setNewTeamDescription] = useState('');
   const [creating, setCreating] = useState(false);
+  const [activeTab, setActiveTab] = useState('all');
 
   useEffect(() => {
     fetchWorkspaceData();
@@ -54,9 +67,10 @@ export default function WorkspacePage() {
 
   const fetchWorkspaceData = async () => {
     try {
-      const [wsRes, boardsRes] = await Promise.all([
+      const [wsRes, boardsRes, teamsRes] = await Promise.all([
         apiGet(`/workspaces/${workspaceId}`),
-        apiGet(`/workspaces/${workspaceId}/boards`)
+        apiGet(`/workspaces/${workspaceId}/boards`),
+        apiGet(`/workspaces/${workspaceId}/teams`)
       ]);
 
       if (wsRes.ok) {
@@ -70,6 +84,10 @@ export default function WorkspacePage() {
       if (boardsRes.ok) {
         setBoards(await boardsRes.json());
       }
+      
+      if (teamsRes.ok) {
+        setTeams(await teamsRes.json());
+      }
     } catch (error) {
       console.error('Failed to fetch workspace:', error);
       toast.error('Failed to load workspace');
@@ -77,6 +95,16 @@ export default function WorkspacePage() {
       setLoading(false);
     }
   };
+
+  // Categorize boards
+  const categorizedBoards = useMemo(() => {
+    const invited = boards.filter(b => b.category === 'invited');
+    const personal = boards.filter(b => b.category === 'personal');
+    const team = boards.filter(b => b.category === 'team');
+    return { invited, personal, team, all: boards };
+  }, [boards]);
+
+  const isOwner = workspace?.owner_id === user?.user_id;
 
   const createBoard = async (e) => {
     e.preventDefault();
@@ -91,9 +119,22 @@ export default function WorkspacePage() {
 
       if (response.ok) {
         const board = await response.json();
+        
+        // Assign to team if selected
+        if (newBoardTeamId) {
+          await apiPatch(`/boards/${board.board_id}/team`, { team_id: newBoardTeamId });
+          board.team_id = newBoardTeamId;
+          board.category = 'team';
+          const team = teams.find(t => t.team_id === newBoardTeamId);
+          board.team_name = team?.name;
+        } else {
+          board.category = 'personal';
+        }
+        
         setBoards([...boards, board]);
         setNewBoardName('');
         setNewBoardColor(BOARD_COLORS[0]);
+        setNewBoardTeamId('');
         setCreateDialogOpen(false);
         toast.success('Board created!');
       } else {
@@ -103,6 +144,36 @@ export default function WorkspacePage() {
     } catch (error) {
       console.error('Failed to create board:', error);
       toast.error('Failed to create board');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const createTeam = async (e) => {
+    e.preventDefault();
+    if (!newTeamName.trim()) return;
+
+    setCreating(true);
+    try {
+      const response = await apiPost(`/workspaces/${workspaceId}/teams`, {
+        name: newTeamName,
+        description: newTeamDescription
+      });
+
+      if (response.ok) {
+        const team = await response.json();
+        setTeams([...teams, team]);
+        setNewTeamName('');
+        setNewTeamDescription('');
+        setCreateTeamDialogOpen(false);
+        toast.success('Team created!');
+      } else {
+        const error = await response.json();
+        toast.error(error.detail || 'Failed to create team');
+      }
+    } catch (error) {
+      console.error('Failed to create team:', error);
+      toast.error('Failed to create team');
     } finally {
       setCreating(false);
     }
@@ -207,6 +278,59 @@ export default function WorkspacePage() {
           </div>
 
           <div className="flex items-center gap-3">
+            {isOwner && (
+              <Dialog open={createTeamDialogOpen} onOpenChange={setCreateTeamDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" data-testid="create-team-btn">
+                    <Users className="w-4 h-4 mr-2" />
+                    New Team
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Create Team</DialogTitle>
+                    <DialogDescription>Create a team to organize boards and members.</DialogDescription>
+                  </DialogHeader>
+                  <form onSubmit={createTeam} className="space-y-4 mt-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="team-name">Team Name</Label>
+                      <Input
+                        id="team-name"
+                        placeholder="Marketing Team"
+                        value={newTeamName}
+                        onChange={(e) => setNewTeamName(e.target.value)}
+                        required
+                        data-testid="team-name-input"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="team-description">Description (optional)</Label>
+                      <Textarea
+                        id="team-description"
+                        placeholder="Team description..."
+                        value={newTeamDescription}
+                        onChange={(e) => setNewTeamDescription(e.target.value)}
+                        data-testid="team-description-input"
+                      />
+                    </div>
+                    <div className="flex justify-end gap-3">
+                      <Button type="button" variant="outline" onClick={() => setCreateTeamDialogOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button 
+                        type="submit" 
+                        className="bg-odapto-teal hover:bg-odapto-teal/90 text-white"
+                        disabled={creating}
+                        data-testid="create-team-submit-btn"
+                      >
+                        {creating ? 'Creating...' : 'Create Team'}
+                      </Button>
+                    </div>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            )}
+            
             <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
               <DialogTrigger asChild>
                 <Button 
@@ -250,6 +374,24 @@ export default function WorkspacePage() {
                       ))}
                     </div>
                   </div>
+                  {teams.length > 0 && (
+                    <div className="space-y-2">
+                      <Label>Assign to Team (optional)</Label>
+                      <Select value={newBoardTeamId || "none"} onValueChange={(val) => setNewBoardTeamId(val === "none" ? "" : val)}>
+                        <SelectTrigger data-testid="board-team-select">
+                          <SelectValue placeholder="No team (Personal board)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No team (Personal board)</SelectItem>
+                          {teams.map((team) => (
+                            <SelectItem key={team.team_id} value={team.team_id}>
+                              {team.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                   <div className="flex justify-end gap-3">
                     <Button type="button" variant="outline" onClick={() => setCreateDialogOpen(false)}>
                       Cancel
@@ -269,112 +411,167 @@ export default function WorkspacePage() {
           </div>
         </div>
 
-        {/* Boards Grid */}
-        {boards.length === 0 ? (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-center py-20"
-          >
-            <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-muted flex items-center justify-center">
-              <LayoutGrid className="w-10 h-10 text-muted-foreground" />
-            </div>
-            <h3 className="font-heading text-xl font-semibold mb-2">No boards yet</h3>
-            <p className="text-muted-foreground mb-6">
-              Create your first board to start organizing your work
-            </p>
-            <Button 
-              onClick={() => setCreateDialogOpen(true)}
-              className="bg-odapto-orange hover:bg-odapto-orange-hover text-white"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Create Board
-            </Button>
-          </motion.div>
-        ) : (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {boards.map((board, index) => (
-              <motion.div
-                key={board.board_id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.05 }}
-                className="group relative"
-              >
-                <Link 
-                  to={`/board/${board.board_id}`}
-                  className="block"
-                  data-testid={`board-card-${board.board_id}`}
-                >
-                  <div 
-                    className="h-36 rounded-xl p-4 flex flex-col justify-between text-white hover:opacity-90 transition-opacity relative overflow-hidden"
-                    style={{ 
-                      backgroundColor: board.background || '#3A8B84',
-                      backgroundImage: board.background_type === 'image' && board.background_image 
-                        ? `url(${board.background_image})` 
-                        : 'none',
-                      backgroundSize: 'cover',
-                      backgroundPosition: 'center'
-                    }}
-                  >
-                    <div className="absolute inset-0 bg-black/30" />
-                    <div className="relative z-10">
-                      <h3 className="font-heading font-semibold text-lg drop-shadow-md">{board.name}</h3>
-                    </div>
-                    {/* Board Stats */}
-                    <div className="relative z-10 flex items-center gap-3 text-white/90 text-sm">
-                      <span className="flex items-center gap-1" title="Lists">
-                        <List className="w-3.5 h-3.5" />
-                        {board.list_count || 0}
-                      </span>
-                      <span className="flex items-center gap-1" title="Cards">
-                        <Square className="w-3.5 h-3.5" />
-                        {board.card_count || 0}
-                      </span>
-                      <span className="flex items-center gap-1" title="Attachments">
-                        <Paperclip className="w-3.5 h-3.5" />
-                        {board.attachment_count || 0}
-                      </span>
-                    </div>
-                  </div>
-                </Link>
-                
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button 
-                      className="absolute top-2 right-2 p-1.5 rounded-md bg-black/20 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/40"
-                      data-testid={`board-menu-${board.board_id}`}
-                    >
-                      <MoreVertical className="w-4 h-4" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent>
-                    <DropdownMenuItem 
-                      onClick={() => deleteBoard(board.board_id)}
-                      className="text-destructive cursor-pointer"
-                    >
-                      <Trash2 className="w-4 h-4 mr-2" />
-                      Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </motion.div>
-            ))}
+        {/* Boards with Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="mb-6">
+            <TabsTrigger value="all" className="flex items-center gap-2" data-testid="tab-all">
+              <LayoutGrid className="w-4 h-4" />
+              All ({boards.length})
+            </TabsTrigger>
+            <TabsTrigger value="personal" className="flex items-center gap-2" data-testid="tab-personal">
+              <FolderHeart className="w-4 h-4" />
+              Personal ({categorizedBoards.personal.length})
+            </TabsTrigger>
+            <TabsTrigger value="team" className="flex items-center gap-2" data-testid="tab-team">
+              <Users className="w-4 h-4" />
+              Team ({categorizedBoards.team.length})
+            </TabsTrigger>
+            <TabsTrigger value="invited" className="flex items-center gap-2" data-testid="tab-invited">
+              <Mail className="w-4 h-4" />
+              Invited ({categorizedBoards.invited.length})
+            </TabsTrigger>
+          </TabsList>
 
-            {/* Add Board Card */}
-            <motion.button
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: boards.length * 0.05 }}
-              onClick={() => setCreateDialogOpen(true)}
-              className="h-32 rounded-xl border-2 border-dashed border-border hover:border-odapto-orange/50 flex items-center justify-center gap-2 text-muted-foreground hover:text-odapto-orange transition-colors"
-              data-testid="add-board-card"
-            >
-              <Plus className="w-5 h-5" />
-              <span>Add Board</span>
-            </motion.button>
-          </div>
-        )}
+          {['all', 'personal', 'team', 'invited'].map((tabKey) => (
+            <TabsContent key={tabKey} value={tabKey}>
+              {categorizedBoards[tabKey].length === 0 ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="text-center py-16"
+                >
+                  <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-muted flex items-center justify-center">
+                    {tabKey === 'personal' && <FolderHeart className="w-8 h-8 text-muted-foreground" />}
+                    {tabKey === 'team' && <Users className="w-8 h-8 text-muted-foreground" />}
+                    {tabKey === 'invited' && <Mail className="w-8 h-8 text-muted-foreground" />}
+                    {tabKey === 'all' && <LayoutGrid className="w-8 h-8 text-muted-foreground" />}
+                  </div>
+                  <h3 className="font-heading text-lg font-semibold mb-2">
+                    {tabKey === 'personal' && 'No personal boards'}
+                    {tabKey === 'team' && 'No team boards'}
+                    {tabKey === 'invited' && 'No invited boards'}
+                    {tabKey === 'all' && 'No boards yet'}
+                  </h3>
+                  <p className="text-muted-foreground text-sm mb-4">
+                    {tabKey === 'personal' && 'Create a board to get started'}
+                    {tabKey === 'team' && 'Assign boards to teams to see them here'}
+                    {tabKey === 'invited' && 'Boards you\'ve been invited to will appear here'}
+                    {tabKey === 'all' && 'Create your first board to start organizing'}
+                  </p>
+                  {(tabKey === 'all' || tabKey === 'personal') && (
+                    <Button 
+                      onClick={() => setCreateDialogOpen(true)}
+                      className="bg-odapto-orange hover:bg-odapto-orange-hover text-white"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Create Board
+                    </Button>
+                  )}
+                </motion.div>
+              ) : (
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {categorizedBoards[tabKey].map((board, index) => (
+                    <motion.div
+                      key={board.board_id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                      className="group relative"
+                    >
+                      <Link 
+                        to={`/board/${board.board_id}`}
+                        className="block"
+                        data-testid={`board-card-${board.board_id}`}
+                      >
+                        <div 
+                          className="h-36 rounded-xl p-4 flex flex-col justify-between text-white hover:opacity-90 transition-opacity relative overflow-hidden"
+                          style={{ 
+                            backgroundColor: board.background || '#3A8B84',
+                            backgroundImage: board.background_type === 'image' && board.background_image 
+                              ? `url(${board.background_image})` 
+                              : 'none',
+                            backgroundSize: 'cover',
+                            backgroundPosition: 'center'
+                          }}
+                        >
+                          <div className="absolute inset-0 bg-black/30" />
+                          <div className="relative z-10">
+                            <h3 className="font-heading font-semibold text-lg drop-shadow-md">{board.name}</h3>
+                            {/* Category badge */}
+                            {board.category === 'team' && board.team_name && (
+                              <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 text-xs bg-white/20 rounded-full">
+                                <Users className="w-3 h-3" />
+                                {board.team_name}
+                              </span>
+                            )}
+                            {board.category === 'invited' && board.invited_by_name && (
+                              <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 text-xs bg-white/20 rounded-full">
+                                <UserPlus className="w-3 h-3" />
+                                Invited by {board.invited_by_name}
+                              </span>
+                            )}
+                          </div>
+                          {/* Board Stats */}
+                          <div className="relative z-10 flex items-center gap-3 text-white/90 text-sm">
+                            <span className="flex items-center gap-1" title="Lists">
+                              <List className="w-3.5 h-3.5" />
+                              {board.list_count || 0}
+                            </span>
+                            <span className="flex items-center gap-1" title="Cards">
+                              <Square className="w-3.5 h-3.5" />
+                              {board.card_count || 0}
+                            </span>
+                            <span className="flex items-center gap-1" title="Attachments">
+                              <Paperclip className="w-3.5 h-3.5" />
+                              {board.attachment_count || 0}
+                            </span>
+                          </div>
+                        </div>
+                      </Link>
+                      
+                      {board.category !== 'invited' && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button 
+                              className="absolute top-2 right-2 p-1.5 rounded-md bg-black/20 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/40"
+                              data-testid={`board-menu-${board.board_id}`}
+                            >
+                              <MoreVertical className="w-4 h-4" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent>
+                            <DropdownMenuItem 
+                              onClick={() => deleteBoard(board.board_id)}
+                              className="text-destructive cursor-pointer"
+                            >
+                              <Trash2 className="w-4 h-4 mr-2" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                    </motion.div>
+                  ))}
+
+                  {/* Add Board Card - only show on personal tab */}
+                  {tabKey === 'personal' && (
+                    <motion.button
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: categorizedBoards[tabKey].length * 0.05 }}
+                      onClick={() => setCreateDialogOpen(true)}
+                      className="h-36 rounded-xl border-2 border-dashed border-border hover:border-odapto-orange/50 flex items-center justify-center gap-2 text-muted-foreground hover:text-odapto-orange transition-colors"
+                      data-testid="add-board-card"
+                    >
+                      <Plus className="w-5 h-5" />
+                      <span>Add Board</span>
+                    </motion.button>
+                  )}
+                </div>
+              )}
+            </TabsContent>
+          ))}
+        </Tabs>
       </main>
     </div>
   );

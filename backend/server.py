@@ -913,7 +913,7 @@ async def add_workspace_member(workspace_id: str, request: Request, user: User =
     if not email_result.get("success"):
         logger.error(f"Failed to send workspace invitation email to {member_email}: {email_result.get('error')}")
         return {
-            "message": f"Invitation created but email delivery failed. The user can still join via invitation link.",
+            "message": "Invitation created but email delivery failed. The user can still join via invitation link.",
             "pending": True,
             "email": member_email,
             "invitation_link": invitation_link,
@@ -1201,7 +1201,7 @@ async def get_boards(workspace_id: str, user: User = Depends(get_current_user)):
         {"_id": 0}
     ).to_list(100)
     
-    # Add summary counts for each board
+    # Add summary counts and categorization for each board
     for board in boards:
         list_count = await db.lists.count_documents({"board_id": board["board_id"]})
         cards = await db.cards.find({"board_id": board["board_id"]}, {"attachments": 1}).to_list(1000)
@@ -1211,6 +1211,28 @@ async def get_boards(workspace_id: str, user: User = Depends(get_current_user)):
         board["list_count"] = list_count
         board["card_count"] = card_count
         board["attachment_count"] = attachment_count
+        
+        # Determine board category
+        is_owner = board.get("created_by") == user.user_id
+        has_team = board.get("team_id") is not None
+        
+        if has_team:
+            board["category"] = "team"
+            # Get team name
+            team = await db.teams.find_one({"team_id": board["team_id"]}, {"name": 1})
+            board["team_name"] = team.get("name") if team else None
+        elif is_owner:
+            board["category"] = "personal"
+        else:
+            board["category"] = "invited"
+            # Get inviter info
+            for member in board.get("members", []):
+                if member.get("user_id") == user.user_id:
+                    inviter_id = member.get("invited_by")
+                    if inviter_id:
+                        inviter = await db.users.find_one({"user_id": inviter_id}, {"name": 1})
+                        board["invited_by_name"] = inviter.get("name") if inviter else None
+                    break
     
     return boards
 
@@ -1384,7 +1406,7 @@ async def invite_board_member(board_id: str, data: BoardInviteRequest, user: Use
     if not email_result.get("success"):
         logger.error(f"Failed to send board invitation email to {data.email}: {email_result.get('error')}")
         return {
-            "message": f"Invitation created but email delivery failed. Share this link with them.",
+            "message": "Invitation created but email delivery failed. Share this link with them.",
             "pending": True,
             "email": data.email,
             "invitation_link": invitation_link,
@@ -1856,7 +1878,7 @@ async def invite_card_member(card_id: str, data: CardInviteRequest, user: User =
     if not email_result.get("success"):
         logger.error(f"Failed to send card invitation email to {data.email}: {email_result.get('error')}")
         return {
-            "message": f"Invitation created but email delivery failed. Share this link with them.",
+            "message": "Invitation created but email delivery failed. Share this link with them.",
             "pending": True,
             "email": data.email,
             "invitation_link": invitation_link,
