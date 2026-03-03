@@ -15,36 +15,7 @@ Build Odapto with:
 - Template system for reusable board templates
 - Admin panel for user management and analytics
 
-## User Personas
-
-### Admin User
-- Full system access
-- Can manage all users and roles
-- Can create/manage template categories
-- View platform analytics and email logs
-- First registered user becomes admin
-
-### Privileged User
-- Can create workspaces and boards
-- Can publish boards as templates
-- Access to template gallery
-
-### Normal User
-- Can create workspaces and boards
-- Can use templates from gallery
-- Cannot publish templates
-
-## Core Requirements (Static)
-1. **Authentication**: Email/password + Google OAuth via Emergent Auth
-2. **Role-based Access**: Admin, Privileged, Normal user roles
-3. **Workspaces**: Multi-workspace support with member management
-4. **Kanban Boards**: Drag-and-drop lists and cards
-5. **Card Features**: Description, due dates, labels, checklists, comments
-6. **Templates**: Public template gallery with categories
-7. **Admin Panel**: User management, analytics, category management
-8. **Email Invitations**: Gmail SMTP for workspace/board/card invitations
-
-## What's Been Implemented
+## What's Been Implemented (Updated Mar 3, 2026)
 
 ### Backend (FastAPI)
 - [x] Email/Password registration and login
@@ -58,13 +29,14 @@ Build Odapto with:
 - [x] Card CRUD with full features (labels, due dates, checklists, comments)
 - [x] Card move between lists endpoint
 - [x] Card-level member invitation
+- [x] **Card Copy functionality** (NEW - Mar 3)
 - [x] Pending invites for unregistered users
-- [x] **Gmail SMTP Email Service** (NEW - Mar 1)
-- [x] **Secure invitation tokens with 7-day expiration** (NEW - Mar 1)
-- [x] **Single-use invitation token validation** (NEW - Mar 1)
-- [x] **Email logs with success/failure tracking** (NEW - Mar 1)
-- [x] **Admin email logs endpoint** (NEW - Mar 1)
-- [x] **Admin pending invitations endpoint** (NEW - Mar 1)
+- [x] Gmail SMTP Email Service
+- [x] Secure invitation tokens with 7-day expiration
+- [x] Single-use invitation token validation
+- [x] Email logs with success/failure tracking
+- [x] Admin email logs endpoint
+- [x] Admin pending invitations endpoint
 - [x] Comment notifications to board members
 - [x] Notification system (create, read, mark read)
 - [x] Template categories (admin only)
@@ -75,37 +47,50 @@ Build Odapto with:
 - [x] Admin analytics endpoint
 - [x] WebSocket endpoint for real-time collaboration
 - [x] File upload for card attachments and board backgrounds
+- [x] **Teams CRUD API** (NEW - Mar 3)
+  - Create/update/delete teams
+  - Add/remove team members
+  - Assign boards to teams
+- [x] **Inviter-only member removal** (NEW - Mar 3)
+- [x] **Board stats endpoint** - list/card/attachment counts (NEW - Mar 3)
 
 ### Frontend (React)
+- [x] **New Odapto Logo** (NEW - Mar 3)
 - [x] Landing page with Odapto branding
 - [x] Login/Register pages with Google OAuth
 - [x] Dashboard with workspace listing and notification bell
 - [x] Workspace page with board grid
+- [x] **Enhanced board cards with stats** (NEW - Mar 3)
+  - Background image preview
+  - List count icon
+  - Card count icon
+  - Attachment count icon
 - [x] Kanban board with drag-drop (hello-pangea/dnd)
+- [x] **Notification bell inside BoardPage** (NEW - Mar 3)
 - [x] Board member management and invitation
 - [x] Board background color/image customization
+- [x] **Card action buttons** (NEW - Mar 3)
+  - Copy Card
+  - Move Card (with list selector dialog)
+  - Delete Card
 - [x] Enhanced card preview with:
-  - [x] Due date color-coding (red=overdue, orange=today, gray=future)
-  - [x] Priority badges (Low/Medium/High/Urgent)
-  - [x] Named labels with colors
-  - [x] Assigned member avatars
-  - [x] Attachment count
-- [x] Enhanced card detail modal with:
-  - [x] Labels section with named labels
-  - [x] Assigned Members with card-level invitations
-  - [x] Due Date picker with status indicator
-  - [x] Priority selector (Low/Medium/High/Urgent)
-  - [x] Description textarea
-  - [x] Attachments with upload
-  - [x] Checklist with progress bar
-  - [x] Comments section
-- [x] **Invitation Accept Page** (NEW - Mar 1)
-  - [x] Shows invitation details (workspace/board/card name, inviter, role, expiration)
-  - [x] Login/SignUp buttons for unauthenticated users
-  - [x] Accept button for authenticated users
-  - [x] Redirect handling for invitation flow
+  - Due date color-coding (red=overdue, orange=today, gray=future)
+  - Priority badges (Low/Medium/High/Urgent)
+  - Named labels with colors
+  - Assigned member avatars
+  - Attachment count
+- [x] Enhanced card detail modal
+- [x] Invitation Accept Page
 - [x] Template gallery page
 - [x] Admin panel with user/category management and analytics
+- [x] **Enhanced Profile dropdown** (NEW - Mar 3)
+  - Profile
+  - Integrations
+  - Change Password
+  - Help
+  - Upgrade Plan
+  - Admin Panel (for admins)
+  - Log out
 - [x] Profile page
 - [x] Real-time notification system
 - [x] Dark/Light theme support
@@ -115,55 +100,39 @@ Build Odapto with:
 ### Email System
 - [x] Gmail SMTP integration with STARTTLS
 - [x] Branded email templates with Odapto colors
-- [x] Workspace invitation emails
-- [x] Board invitation emails
-- [x] Card assignment emails
+- [x] Workspace, board, and card invitation emails
 - [x] Invitation token generation and validation
 - [x] 7-day token expiration
 - [x] Single-use token enforcement
-- [x] Email send logging (success/failure)
-- [x] Retry mechanism (3 attempts)
-
-### Design
-- Odapto branding with logo colors (Orange #E67E4C, Teal #3A8B84)
-- Outfit font for headings, Inter for body
-- Clean enterprise-grade UI
-- Responsive tablet-friendly design
+- [x] Email send logging
 
 ## Prioritized Backlog
 
-### P0 (Critical - COMPLETED)
-- [x] Card-level member invitations
-- [x] Invite unregistered users via email (pending invite system)
-- [x] Due date color-coding on card previews
-- [x] Named labels in card modal
-- [x] Priority selector in card modal
-- [x] Attachments section in card modal
-- [x] Gmail SMTP email invitations
-- [x] Secure invitation tokens
+### P0 (COMPLETED)
+All P0 features completed as of Mar 3, 2026.
 
 ### P1 (High Priority - Next)
-1. WebSocket integration for real-time board updates
-2. Card activity/history log
-3. Board filters (by label, due date, member)
-4. Keyboard shortcuts
-5. Card cover images
+1. **Workspace organization** - Divide into Invited/Personal/Team boards
+2. **Profile photo editing** - Upload, crop, 2MB limit
+3. **Attachment previews** - Preview, download, set as cover
+4. WebSocket integration for real-time board updates
+5. Card activity/history log
+6. Board filters (by label, due date, member)
 
 ### P2 (Medium Priority)
-1. Board export (JSON/CSV)
-2. Card attachments preview
-3. Checklist progress visualization on card preview
-4. Board templates preview before use
-5. User avatar upload
-6. Email notifications for due dates
+1. Cloud integrations (Google Drive, OneDrive, Dropbox)
+2. Board export (JSON/CSV)
+3. Card cover images
+4. Keyboard shortcuts
 
-### Future (Subscription-Ready)
-1. Subscription tiers (Free, Pro, Enterprise)
-2. Premium templates
-3. Feature flags system
-4. Workspace-based billing
-5. Advanced analytics dashboard
-6. Microsoft OAuth
+### Future (Mobile & Subscription)
+1. Android Tablet app (Play Store)
+2. iPad app (App Store)
+3. Subscription tiers (Free, Pro, Enterprise)
+4. Premium templates
+5. Feature flags system
+6. Advanced analytics dashboard
+7. Microsoft OAuth
 
 ## Technical Architecture
 
@@ -179,51 +148,37 @@ Build Odapto with:
 All endpoints prefixed with `/api`:
 - `/api/auth/*` - Authentication
 - `/api/workspaces/*` - Workspace management
+- `/api/workspaces/{id}/teams` - Teams in workspace
+- `/api/teams/{id}/*` - Team operations
 - `/api/boards/*` - Board operations
+- `/api/boards/{id}/team` - Assign board to team
 - `/api/lists/*` - List operations
 - `/api/cards/*` - Card operations
-- `/api/cards/{card_id}/invite` - Card-level member invitation
-- `/api/cards/{card_id}/members/{member_id}` - Remove card member
-- `/api/invitations/{token}` - Get invitation details (public)
-- `/api/invitations/{token}/accept` - Accept invitation (auth required)
+- `/api/cards/{id}/move` - Move card to another list
+- `/api/invitations/{token}` - Get/accept invitation
 - `/api/templates` - Template gallery
-- `/api/template-categories` - Admin category management
 - `/api/admin/*` - Admin operations
-- `/api/admin/email-logs` - Email send logs
-- `/api/admin/pending-invitations` - Pending invitation tokens
 - `/api/search` - Global search
-- `/ws/board/{board_id}` - WebSocket for real-time
+- `/ws/board/{id}` - WebSocket for real-time
 
 ### Database Schema
 - **users**: user_id, email, password_hash, name, role, picture
 - **workspaces**: workspace_id, name, description, owner_id, members
-- **boards**: board_id, workspace_id, name, background, background_type, members, is_template
-- **lists**: list_id, board_id, name, position, wip_limit
+- **teams**: team_id, workspace_id, name, owner_id, members
+- **boards**: board_id, workspace_id, team_id, name, background, members, is_template
+- **lists**: list_id, board_id, name, position
 - **cards**: card_id, list_id, board_id, title, description, due_date, labels, priority, assigned_members, attachments, checklist, comments
-- **pending_invites**: invite_id, email, invite_type, target_id, board_id, invited_by
-- **invitation_tokens**: token, email, invitation_type, target_id, role, invited_by, target_name, used, expires_at
-- **email_logs**: log_id, to_email, subject, email_type, success, error, invitation_token, sent_at
-- **notifications**: notification_id, user_id, type, title, message, read
+- **invitation_tokens**: token, email, invitation_type, target_id, used, expires_at
+- **email_logs**: log_id, to_email, subject, success, error
 
 ## Test Credentials
 - **Admin**: odapto.admin@emergent.com / SecurePassword123!
 - **Test Board**: board_8b24ee8c579c
 - **Test Workspace**: ws_3a39c12c673e
 
-## Environment Variables (Backend)
-- MONGO_URL - MongoDB connection string
-- DB_NAME - Database name
-- CORS_ORIGINS - Allowed CORS origins
-- SMTP_HOST - Gmail SMTP host (smtp.gmail.com)
-- SMTP_PORT - SMTP port (587)
-- SMTP_USERNAME - Gmail address
-- SMTP_PASSWORD - Gmail App Password
-- SMTP_FROM_NAME - Email sender name (Odapto)
-- FRONTEND_URL - Frontend base URL for invitation links
-
 ## Next Tasks
-1. Implement real-time board sync via WebSockets
-2. Add card activity/history log
-3. Add board filters (by label, due date, member)
-4. Implement keyboard shortcuts
-5. Add card cover images
+1. Implement workspace board organization (Invited/Personal/Team categories)
+2. Add profile photo upload with cropping
+3. Add attachment preview, download, and set-as-cover features
+4. Implement real-time board sync via WebSockets
+5. Add card activity/history log
