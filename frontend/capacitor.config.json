@@ -1,0 +1,19 @@
+{
+  "appId": "com.odapto.app",
+  "appName": "Odapto",
+  "webDir": "build",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 2000,
+      "backgroundColor": "#E67E4C",
+      "showSpinner": false
+    },
+    "StatusBar": {
+      "style": "dark",
+      "backgroundColor": "#E67E4C"
+    }
+  }
+}

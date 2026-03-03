@@ -3,6 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@capacitor/android": "6",
+    "@capacitor/app": "6",
+    "@capacitor/cli": "6",
+    "@capacitor/core": "6",
+    "@capacitor/haptics": "6",
+    "@capacitor/ios": "6",
+    "@capacitor/keyboard": "6",
+    "@capacitor/push-notifications": "6",
+    "@capacitor/splash-screen": "6",
+    "@capacitor/status-bar": "6",
     "@hello-pangea/dnd": "^18.0.1",
     "@hookform/resolvers": "^5.0.1",
     "@radix-ui/react-accordion": "^1.2.8",
@@ -62,7 +72,12 @@
   "scripts": {
     "start": "craco start",
     "build": "craco build",
-    "test": "craco test"
+    "test": "craco test",
+    "cap:sync": "npx cap sync",
+    "cap:build:android": "yarn build && npx cap sync android",
+    "cap:build:ios": "yarn build && npx cap sync ios",
+    "cap:open:android": "npx cap open android",
+    "cap:open:ios": "npx cap open ios"
   },
   "browserslist": {
     "production": [
