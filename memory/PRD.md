@@ -3,18 +3,6 @@
 ## Project Overview
 Odapto is a production-grade Kanban-based work management SaaS similar to Trello, built with React + FastAPI + MongoDB.
 
-## Original Problem Statement
-Build Odapto with:
-- React frontend (Web-first with responsive tablet support)
-- FastAPI backend with MongoDB
-- Email/Password + Google OAuth authentication
-- WebSockets for real-time collaboration
-- Local file storage for attachments
-- Role-based access control (Admin, Privileged, Normal)
-- Workspace and board management
-- Template system for reusable board templates
-- Admin panel for user management and analytics
-
 ## What's Been Implemented (Updated Mar 3, 2026)
 
 ### Backend (FastAPI)
@@ -29,95 +17,66 @@ Build Odapto with:
 - [x] Card CRUD with full features (labels, due dates, checklists, comments)
 - [x] Card move between lists endpoint
 - [x] Card-level member invitation
-- [x] **Card Copy functionality** (NEW - Mar 3)
-- [x] Pending invites for unregistered users
+- [x] Card Copy functionality
 - [x] Gmail SMTP Email Service
 - [x] Secure invitation tokens with 7-day expiration
-- [x] Single-use invitation token validation
-- [x] Email logs with success/failure tracking
-- [x] Admin email logs endpoint
-- [x] Admin pending invitations endpoint
-- [x] Comment notifications to board members
-- [x] Notification system (create, read, mark read)
-- [x] Template categories (admin only)
-- [x] Board to template publishing (privileged users)
-- [x] Template gallery with category filtering
-- [x] Use template to create board
-- [x] Global search across boards/cards/templates
+- [x] Notification system
+- [x] Template categories and gallery
 - [x] Admin analytics endpoint
 - [x] WebSocket endpoint for real-time collaboration
 - [x] File upload for card attachments and board backgrounds
-- [x] **Teams CRUD API** (NEW - Mar 3)
-  - Create/update/delete teams
-  - Add/remove team members
-  - Assign boards to teams
-- [x] **Inviter-only member removal** (NEW - Mar 3)
-- [x] **Board stats endpoint** - list/card/attachment counts (NEW - Mar 3)
+- [x] **Teams CRUD API** - Create/update/delete teams, manage members
+- [x] **Board-Team Assignment** - Assign boards to teams
+- [x] **Board Categorization** - personal/team/invited categories
+- [x] **Inviter-only member removal**
+- [x] **Board stats endpoint** - list/card/attachment counts
 
 ### Frontend (React)
-- [x] **New Odapto Logo** (NEW - Mar 3)
+- [x] **New Odapto Logo**
 - [x] Landing page with Odapto branding
 - [x] Login/Register pages with Google OAuth
 - [x] Dashboard with workspace listing and notification bell
-- [x] Workspace page with board grid
-- [x] **Enhanced board cards with stats** (NEW - Mar 3)
-  - Background image preview
-  - List count icon
-  - Card count icon
-  - Attachment count icon
-- [x] Kanban board with drag-drop (hello-pangea/dnd)
-- [x] **Notification bell inside BoardPage** (NEW - Mar 3)
-- [x] Board member management and invitation
-- [x] Board background color/image customization
-- [x] **Card action buttons** (NEW - Mar 3)
-  - Copy Card
-  - Move Card (with list selector dialog)
-  - Delete Card
-- [x] Enhanced card preview with:
-  - Due date color-coding (red=overdue, orange=today, gray=future)
-  - Priority badges (Low/Medium/High/Urgent)
-  - Named labels with colors
-  - Assigned member avatars
-  - Attachment count
+- [x] **Workspace Board Organization** (NEW)
+  - [x] **4 Tabs**: All, Personal, Team, Invited
+  - [x] **Tab counts** - accurately reflect board counts
+  - [x] **Personal tab** - boards created by user without team
+  - [x] **Team tab** - boards assigned to teams with team name badge
+  - [x] **Invited tab** - boards user was invited to
+- [x] **Team Management**
+  - [x] Create Team button for workspace owners
+  - [x] Create Team dialog with name/description
+  - [x] Board creation with team assignment dropdown
+- [x] **Enhanced board cards with stats** - list/card/attachment counts
+- [x] Kanban board with drag-drop
+- [x] **Notification bell inside BoardPage**
+- [x] **Card action buttons** - Copy, Move, Delete
+- [x] Enhanced card preview with due date colors, priority badges, labels
 - [x] Enhanced card detail modal
 - [x] Invitation Accept Page
 - [x] Template gallery page
-- [x] Admin panel with user/category management and analytics
-- [x] **Enhanced Profile dropdown** (NEW - Mar 3)
-  - Profile
-  - Integrations
-  - Change Password
-  - Help
-  - Upgrade Plan
-  - Admin Panel (for admins)
-  - Log out
+- [x] Admin panel
+- [x] **Enhanced Profile dropdown** - Profile, Integrations, Change Password, Help, Upgrade, Admin, Logout
 - [x] Profile page
 - [x] Real-time notification system
 - [x] Dark/Light theme support
-- [x] Session persistence (localStorage + cookies)
-- [x] Toast notifications (sonner)
 
 ### Email System
 - [x] Gmail SMTP integration with STARTTLS
-- [x] Branded email templates with Odapto colors
+- [x] Branded email templates
 - [x] Workspace, board, and card invitation emails
-- [x] Invitation token generation and validation
-- [x] 7-day token expiration
-- [x] Single-use token enforcement
 - [x] Email send logging
 
 ## Prioritized Backlog
 
 ### P0 (COMPLETED)
-All P0 features completed as of Mar 3, 2026.
+All P0 features completed.
 
 ### P1 (High Priority - Next)
-1. **Workspace organization** - Divide into Invited/Personal/Team boards
-2. **Profile photo editing** - Upload, crop, 2MB limit
-3. **Attachment previews** - Preview, download, set as cover
-4. WebSocket integration for real-time board updates
-5. Card activity/history log
-6. Board filters (by label, due date, member)
+1. **Profile photo editing** - Upload, crop, 2MB limit
+2. **Attachment previews** - Preview, download, set as cover
+3. WebSocket integration for real-time board updates
+4. Card activity/history log
+5. Board filters (by label, due date, member)
 
 ### P2 (Medium Priority)
 1. Cloud integrations (Google Drive, OneDrive, Dropbox)
@@ -130,9 +89,8 @@ All P0 features completed as of Mar 3, 2026.
 2. iPad app (App Store)
 3. Subscription tiers (Free, Pro, Enterprise)
 4. Premium templates
-5. Feature flags system
-6. Advanced analytics dashboard
-7. Microsoft OAuth
+5. Advanced analytics dashboard
+6. Microsoft OAuth
 
 ## Technical Architecture
 
@@ -142,7 +100,7 @@ All P0 features completed as of Mar 3, 2026.
 - **Database**: MongoDB
 - **Auth**: Session tokens + Emergent Google OAuth
 - **Email**: Gmail SMTP (smtp.gmail.com:587 with STARTTLS)
-- **Storage**: Local file storage (MVP), ready for S3 migration
+- **Storage**: Local file storage (MVP)
 
 ### Key API Endpoints
 All endpoints prefixed with `/api`:
@@ -158,14 +116,12 @@ All endpoints prefixed with `/api`:
 - `/api/invitations/{token}` - Get/accept invitation
 - `/api/templates` - Template gallery
 - `/api/admin/*` - Admin operations
-- `/api/search` - Global search
-- `/ws/board/{id}` - WebSocket for real-time
 
 ### Database Schema
 - **users**: user_id, email, password_hash, name, role, picture
 - **workspaces**: workspace_id, name, description, owner_id, members
 - **teams**: team_id, workspace_id, name, owner_id, members
-- **boards**: board_id, workspace_id, team_id, name, background, members, is_template
+- **boards**: board_id, workspace_id, team_id, name, background, members, is_template, category
 - **lists**: list_id, board_id, name, position
 - **cards**: card_id, list_id, board_id, title, description, due_date, labels, priority, assigned_members, attachments, checklist, comments
 - **invitation_tokens**: token, email, invitation_type, target_id, used, expires_at
@@ -175,10 +131,11 @@ All endpoints prefixed with `/api`:
 - **Admin**: odapto.admin@emergent.com / SecurePassword123!
 - **Test Board**: board_8b24ee8c579c
 - **Test Workspace**: ws_3a39c12c673e
+- **Teams**: Marketing Team, Dev Team
 
 ## Next Tasks
-1. Implement workspace board organization (Invited/Personal/Team categories)
-2. Add profile photo upload with cropping
-3. Add attachment preview, download, and set-as-cover features
-4. Implement real-time board sync via WebSockets
-5. Add card activity/history log
+1. Add profile photo upload with cropping (2MB limit)
+2. Add attachment preview, download, and set-as-cover features
+3. Implement real-time board sync via WebSockets
+4. Add card activity/history log
+5. Add board filters (by label, due date, member)
