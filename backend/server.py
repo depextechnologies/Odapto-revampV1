@@ -2908,24 +2908,27 @@ async def serve_upload(folder: str, filename: str):
 app.include_router(api_router)
 
 # CORS configuration for web, mobile (Capacitor), and local development
+# Note: When allow_credentials=True, cannot use "*" - must specify exact origins
 CORS_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:8080",
+    "http://localhost:8100",
     "http://localhost",
     "https://localhost",
     "capacitor://localhost",
     "ionic://localhost",
     "http://127.0.0.1:3000",
     "http://127.0.0.1:8080",
+    "http://127.0.0.1:8100",
     "https://task-sync-hub-16.preview.emergentagent.com",
-    "*"  # Allow all origins for development
 ]
 
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
     allow_origins=CORS_ORIGINS,
-    allow_methods=["*"],
+    allow_origin_regex=r"https?://.*",  # Allow any http/https origin as fallback
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
     expose_headers=["*"],
 )

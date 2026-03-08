@@ -32,7 +32,7 @@ export default function ResetPasswordPage() {
     e.preventDefault();
     setSending(true);
     try {
-      const response = await fetch(`${API}/api/auth/forgot-password`, {
+      const response = await fetch(`${API}/auth/forgot-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email })
@@ -62,7 +62,7 @@ export default function ResetPasswordPage() {
 
     setResetting(true);
     try {
-      const response = await fetch(`${API}/api/auth/reset-password`, {
+      const response = await fetch(`${API}/auth/reset-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, new_password: newPassword })
