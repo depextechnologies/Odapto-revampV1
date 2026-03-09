@@ -63,7 +63,6 @@ export const AuthProvider = ({ children }) => {
 
     try {
       const response = await fetch(`${API}/auth/me`, {
-        credentials: 'include',
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -92,7 +91,6 @@ export const AuthProvider = ({ children }) => {
     const response = await fetch(`${API}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
       body: JSON.stringify({ email, password })
     });
     
@@ -114,7 +112,6 @@ export const AuthProvider = ({ children }) => {
     const response = await fetch(`${API}/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
       body: JSON.stringify({ name, email, password })
     });
     
@@ -142,7 +139,6 @@ export const AuthProvider = ({ children }) => {
     const response = await fetch(`${API}/auth/session`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
       body: JSON.stringify({ session_id: sessionId })
     });
     
@@ -164,7 +160,6 @@ export const AuthProvider = ({ children }) => {
     try {
       await fetch(`${API}/auth/logout`, {
         method: 'POST',
-        credentials: 'include',
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
       });
     } catch (error) {

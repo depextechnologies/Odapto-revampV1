@@ -28,8 +28,7 @@ export const apiCall = async (endpoint, options = {}) => {
   
   const fetchOptions = {
     method: options.method || 'GET',
-    headers,
-    credentials: 'include'
+    headers
   };
   
   if (body !== undefined) {

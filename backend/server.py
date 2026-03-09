@@ -2907,31 +2907,27 @@ async def serve_upload(folder: str, filename: str):
 # Include the router in the main app
 app.include_router(api_router)
 
-# CORS configuration for web, mobile (Capacitor), and local development
-# Note: When allow_credentials=True, cannot use "*" - must specify exact origins
-CORS_ORIGINS = [
-    "http://localhost:3000",
-    "http://localhost:8080",
-    "http://localhost:8100",
-    "http://localhost",
-    "https://localhost",
-    "capacitor://localhost",
-    "ionic://localhost",
-    "http://127.0.0.1:3000",
-    "http://127.0.0.1:8080",
-    "http://127.0.0.1:8100",
-    "https://task-sync-hub-16.preview.emergentagent.com",
-]
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=CORS_ORIGINS,
-    allow_origin_regex=r"https?://.*",  # Allow any http/https origin as fallback
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
-    expose_headers=["*"],
-)
+# Custom CORS middleware to handle credentials properly
+@app.middleware("http")
+async def add_cors_headers(request: Request, call_next):
+    # Handle preflight OPTIONS requests
+    if request.method == "OPTIONS":
+        response = Response(status_code=204)
+    else:
+        response = await call_next(request)
+    
+    # Get the origin from the request
+    origin = request.headers.get("origin", "*")
+    
+    # Set CORS headers
+    response.headers["Access-Control-Allow-Origin"] = origin
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With, Accept, Origin"
+    response.headers["Access-Control-Expose-Headers"] = "*"
+    response.headers["Access-Control-Max-Age"] = "3600"
+    
+    return response
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
