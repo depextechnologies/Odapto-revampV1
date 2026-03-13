@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { Button } from '../components/ui/button';
+import { ResponsiveLogo } from '../components/ThemeLogo';
 import { 
   LayoutGrid, 
   Users, 
@@ -17,7 +18,6 @@ import {
   Clock
 } from 'lucide-react';
 
-const LOGO_URL = "/odapto-logo-new.png";
 const HERO_IMAGE = "https://images.unsplash.com/photo-1758691736975-9f7f643d178e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzd8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjBvZmZpY2UlMjB0ZWFtJTIwY29sbGFib3JhdGlvbiUyMGRpdmVyc2V8ZW58MHx8fHwxNzcyMTk5MDAxfDA&ixlib=rb-4.1.0&q=85&w=800";
 
 const fadeInUp = {
@@ -78,7 +78,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <Link to="/" className="flex items-center gap-2">
-              <img src={LOGO_URL} alt="Odapto" className="h-8 w-auto" />
+              <ResponsiveLogo className="h-8 w-auto" />
             </Link>
             
             <div className="flex items-center gap-4">
@@ -293,21 +293,21 @@ export default function LandingPage() {
       <footer className="py-12 px-4 sm:px-6 lg:px-8 border-t border-border">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <img src={LOGO_URL} alt="Odapto" className="h-6 w-auto" />
+            <ResponsiveLogo className="h-6 w-auto" />
             <span className="text-sm text-muted-foreground">
-              2024 Odapto. All rights reserved.
+              © 2026 Odapto. All rights reserved.
             </span>
           </div>
           <div className="flex items-center gap-6">
             <Link to="/templates" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
               Templates
             </Link>
-            <a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+            <Link to="/privacy" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
               Privacy
-            </a>
-            <a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+            </Link>
+            <Link to="/terms" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
               Terms
-            </a>
+            </Link>
           </div>
         </div>
       </footer>

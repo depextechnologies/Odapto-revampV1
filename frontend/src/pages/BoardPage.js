@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import { apiGet, apiPost, apiPatch, apiDelete, apiCall } from '../utils/api';
 import CardDetailModal from '../components/CardDetailModal';
 import NotificationBell from '../components/NotificationBell';
+import { ResponsiveLogo } from '../components/ThemeLogo';
 import { isToday, isPast, isFuture } from 'date-fns';
 import { API_BASE_URL, getWebSocketUrl } from '../config';
 import { 
@@ -39,10 +40,14 @@ import {
   MoveRight,
   MoreVertical,
   Layers,
-  BookTemplate
+  BookTemplate,
+  User,
+  Plug,
+  KeyRound,
+  HelpCircle,
+  Crown,
+  Shield
 } from 'lucide-react';
-
-const LOGO_URL = "/odapto-logo-new.png";
 const API_BASE = API_BASE_URL;
 
 const BOARD_COLORS = [
@@ -959,10 +964,52 @@ export default function BoardPage() {
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
-                  <div className="px-3 py-2">
+                  <div className="px-3 py-2 border-b border-border">
                     <p className="font-medium">{user?.name}</p>
-                    <p className="text-sm text-muted-foreground">{user?.email}</p>
+                    <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
                   </div>
+                  <DropdownMenuItem asChild>
+                    <Link to="/profile" className="cursor-pointer">
+                      <User className="w-4 h-4 mr-2" />
+                      Profile
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/integrations" className="cursor-pointer">
+                      <Plug className="w-4 h-4 mr-2" />
+                      Integrations
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/profile?tab=password" className="cursor-pointer">
+                      <KeyRound className="w-4 h-4 mr-2" />
+                      Change Password
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link to="/help" className="cursor-pointer">
+                      <HelpCircle className="w-4 h-4 mr-2" />
+                      Help
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/upgrade" className="cursor-pointer text-odapto-orange">
+                      <Crown className="w-4 h-4 mr-2" />
+                      Upgrade Plan
+                    </Link>
+                  </DropdownMenuItem>
+                  {isAdmin && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem asChild>
+                        <Link to="/admin" className="cursor-pointer">
+                          <Shield className="w-4 h-4 mr-2" />
+                          Admin Panel
+                        </Link>
+                      </DropdownMenuItem>
+                    </>
+                  )}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleLogout} className="text-destructive cursor-pointer">
                     <LogOut className="w-4 h-4 mr-2" />

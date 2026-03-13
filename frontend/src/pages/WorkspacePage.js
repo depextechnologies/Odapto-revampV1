@@ -14,6 +14,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { toast } from 'sonner';
 import { apiGet, apiPost, apiDelete, apiPatch } from '../utils/api';
+import { API_BASE_URL } from '../config';
+import { ResponsiveLogo } from '../components/ThemeLogo';
 import { 
   Plus, 
   LayoutGrid, 
@@ -32,18 +34,28 @@ import {
   UserPlus,
   Briefcase,
   FolderHeart,
-  Mail
+  Mail,
+  User,
+  Plug,
+  KeyRound,
+  HelpCircle,
+  Crown,
+  Shield
 } from 'lucide-react';
-
-const LOGO_URL = "/odapto-logo-new.png";
 
 const BOARD_COLORS = [
   '#3A8B84', '#E67E4C', '#6366F1', '#EC4899', '#14B8A6', '#F59E0B', '#8B5CF6', '#06B6D4'
 ];
 
+const getImageUrl = (url) => {
+  if (!url) return null;
+  if (url.startsWith('http')) return url;
+  return `${API_BASE_URL}${url}`;
+};
+
 export default function WorkspacePage() {
   const { workspaceId } = useParams();
-  const { user, logout } = useAuth();
+  const { user, logout, isAdmin } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   
@@ -225,7 +237,7 @@ export default function WorkspacePage() {
                 <ArrowLeft className="w-5 h-5" />
               </Link>
               <Link to="/" className="flex items-center gap-2">
-                <img src={LOGO_URL} alt="Odapto" className="h-8 w-auto" />
+                <ResponsiveLogo className="h-8 w-auto" />
               </Link>
             </div>
 
@@ -242,7 +254,7 @@ export default function WorkspacePage() {
                 <DropdownMenuTrigger asChild>
                   <button className="flex items-center gap-2" data-testid="user-menu-btn">
                     <Avatar className="h-8 w-8">
-                      <AvatarImage src={user?.picture} alt={user?.name} />
+                      <AvatarImage src={getImageUrl(user?.picture)} alt={user?.name} />
                       <AvatarFallback className="bg-odapto-orange text-white text-sm">
                         {getInitials(user?.name)}
                       </AvatarFallback>
@@ -250,10 +262,52 @@ export default function WorkspacePage() {
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
-                  <div className="px-3 py-2">
+                  <div className="px-3 py-2 border-b border-border">
                     <p className="font-medium">{user?.name}</p>
-                    <p className="text-sm text-muted-foreground">{user?.email}</p>
+                    <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
                   </div>
+                  <DropdownMenuItem asChild>
+                    <Link to="/profile" className="cursor-pointer">
+                      <User className="w-4 h-4 mr-2" />
+                      Profile
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/integrations" className="cursor-pointer">
+                      <Plug className="w-4 h-4 mr-2" />
+                      Integrations
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/profile?tab=password" className="cursor-pointer">
+                      <KeyRound className="w-4 h-4 mr-2" />
+                      Change Password
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link to="/help" className="cursor-pointer">
+                      <HelpCircle className="w-4 h-4 mr-2" />
+                      Help
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/upgrade" className="cursor-pointer text-odapto-orange">
+                      <Crown className="w-4 h-4 mr-2" />
+                      Upgrade Plan
+                    </Link>
+                  </DropdownMenuItem>
+                  {isAdmin && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem asChild>
+                        <Link to="/admin" className="cursor-pointer">
+                          <Shield className="w-4 h-4 mr-2" />
+                          Admin Panel
+                        </Link>
+                      </DropdownMenuItem>
+                    </>
+                  )}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleLogout} className="text-destructive cursor-pointer">
                     <LogOut className="w-4 h-4 mr-2" />
@@ -487,8 +541,8 @@ export default function WorkspacePage() {
                           className="h-36 rounded-xl p-4 flex flex-col justify-between text-white hover:opacity-90 transition-opacity relative overflow-hidden"
                           style={{ 
                             backgroundColor: board.background || '#3A8B84',
-                            backgroundImage: board.background_type === 'image' && board.background_image 
-                              ? `url(${board.background_image})` 
+                            backgroundImage: board.background_type === 'image' && board.background 
+                              ? `url(${getImageUrl(board.background)})` 
                               : 'none',
                             backgroundSize: 'cover',
                             backgroundPosition: 'center'

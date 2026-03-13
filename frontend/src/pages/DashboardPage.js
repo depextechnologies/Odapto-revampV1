@@ -12,6 +12,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { toast } from 'sonner';
 import { apiGet, apiPost } from '../utils/api';
 import NotificationBell from '../components/NotificationBell';
+import { ResponsiveLogo } from '../components/ThemeLogo';
 import { 
   Plus, 
   LayoutGrid, 
@@ -28,10 +29,10 @@ import {
   Link2,
   KeyRound,
   HelpCircle,
-  Sparkles
+  Sparkles,
+  Plug,
+  Crown
 } from 'lucide-react';
-
-const LOGO_URL = "/odapto-logo-new.png";
 
 export default function DashboardPage() {
   const { user, logout, isAdmin } = useAuth();
@@ -116,7 +117,7 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-6">
               <Link to="/" className="flex items-center gap-2">
-                <img src={LOGO_URL} alt="Odapto" className="h-8 w-auto" />
+                <ResponsiveLogo className="h-8 w-auto" />
               </Link>
               
               <div className="hidden md:flex items-center gap-1 px-3 py-1.5 bg-muted rounded-lg">
@@ -177,8 +178,8 @@ export default function DashboardPage() {
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <Link to="/profile?tab=integrations" className="cursor-pointer">
-                      <Link2 className="w-4 h-4 mr-2" />
+                    <Link to="/integrations" className="cursor-pointer">
+                      <Plug className="w-4 h-4 mr-2" />
                       Integrations
                     </Link>
                   </DropdownMenuItem>
@@ -197,7 +198,7 @@ export default function DashboardPage() {
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <Link to="/upgrade" className="cursor-pointer text-odapto-orange">
-                      <Sparkles className="w-4 h-4 mr-2" />
+                      <Crown className="w-4 h-4 mr-2" />
                       Upgrade Plan
                     </Link>
                   </DropdownMenuItem>

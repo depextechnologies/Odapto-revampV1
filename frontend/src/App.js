@@ -16,6 +16,11 @@ import TemplatesPage from './pages/TemplatesPage';
 import AdminPage from './pages/AdminPage';
 import ProfilePage from './pages/ProfilePage';
 import AcceptInvitePage from './pages/AcceptInvitePage';
+import IntegrationsPage from './pages/IntegrationsPage';
+import HelpPage from './pages/HelpPage';
+import UpgradePage from './pages/UpgradePage';
+import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
+import TermsPage from './pages/TermsPage';
 
 // Auth callback component
 const AuthCallback = () => {
@@ -142,6 +147,32 @@ const AppRouter = () => {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/integrations"
+        element={
+          <ProtectedRoute>
+            <IntegrationsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/help"
+        element={
+          <ProtectedRoute>
+            <HelpPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/upgrade"
+        element={
+          <ProtectedRoute>
+            <UpgradePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route path="/privacy" element={<PrivacyPolicyPage />} />
+      <Route path="/terms" element={<TermsPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
