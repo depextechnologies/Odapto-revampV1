@@ -1401,12 +1401,13 @@ async def get_board(board_id: str, user: User = Depends(get_current_user)):
     if not board:
         raise HTTPException(status_code=404, detail="Board not found")
     
-    # Check workspace access
+    # Check workspace access OR direct board membership
     workspace = await db.workspaces.find_one(
         {"workspace_id": board["workspace_id"], "members.user_id": user.user_id},
         {"_id": 0}
     )
-    if not workspace and not board.get("is_template"):
+    is_board_member = any(m.get("user_id") == user.user_id for m in board.get("members", []))
+    if not workspace and not is_board_member and not board.get("is_template"):
         raise HTTPException(status_code=403, detail="Access denied")
     
     # Get lists and cards
@@ -1492,6 +1493,14 @@ async def invite_board_member(board_id: str, data: BoardInviteRequest, user: Use
             {"board_id": board_id},
             {"$push": {"members": new_member}}
         )
+        
+        # Also add to workspace if not already a member
+        workspace = await db.workspaces.find_one({"workspace_id": board["workspace_id"]}, {"_id": 0})
+        if workspace and not any(m["user_id"] == invite_user["user_id"] for m in workspace.get("members", [])):
+            await db.workspaces.update_one(
+                {"workspace_id": board["workspace_id"]},
+                {"$push": {"members": {"user_id": invite_user["user_id"], "role": "member"}}}
+            )
         
         # Create notification for the invited user
         notification = {
@@ -2094,6 +2103,18 @@ async def invite_card_member(card_id: str, data: CardInviteRequest, user: User =
             {"card_id": card_id},
             {"$push": {"assigned_members": new_member}}
         )
+        
+        # Also add to board and workspace if not already a member
+        if not any(m.get("user_id") == invite_user["user_id"] for m in board.get("members", [])):
+            await db.boards.update_one(
+                {"board_id": board["board_id"]},
+                {"$push": {"members": {"user_id": invite_user["user_id"], "role": "member", "invited_by": user.user_id, "joined_at": datetime.now(timezone.utc).isoformat()}}}
+            )
+        if not any(m.get("user_id") == invite_user["user_id"] for m in workspace.get("members", [])):
+            await db.workspaces.update_one(
+                {"workspace_id": board["workspace_id"]},
+                {"$push": {"members": {"user_id": invite_user["user_id"], "role": "member"}}}
+            )
         
         # Create notification for the invited user
         await create_notification(

@@ -35,6 +35,7 @@ Odapto is a production-grade Kanban-based work management SaaS similar to Trello
 - [x] Real-time WebSocket Sync
 - [x] Card Activity Logging
 - [x] CORS fix - standard CORSMiddleware with allow_origins=["*"], no credentials (NEW)
+- [x] Board/Card invite auto-adds user to workspace (BUG FIX - invited users now see workspaces)
 
 ### Frontend (React)
 - [x] New Odapto Logo (light/dark mode)
