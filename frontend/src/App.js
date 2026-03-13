@@ -1,5 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Capacitor } from '@capacitor/core';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { Toaster } from './components/ui/sonner';
@@ -21,6 +22,7 @@ import HelpPage from './pages/HelpPage';
 import UpgradePage from './pages/UpgradePage';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import TermsPage from './pages/TermsPage';
+import AnimatedSplashScreen from './components/AnimatedSplashScreen';
 
 // Auth callback component
 const AuthCallback = () => {
@@ -90,6 +92,14 @@ const ProtectedRoute = ({ children, requireAdmin = false, requirePrivileged = fa
   return children;
 };
 
+// Root route handler - shows splash on native, landing on web
+const RootRoute = () => {
+  if (Capacitor.isNativePlatform()) {
+    return <AnimatedSplashScreen />;
+  }
+  return <LandingPage />;
+};
+
 // App router with session_id detection
 const AppRouter = () => {
   const location = useLocation();
@@ -101,7 +111,8 @@ const AppRouter = () => {
 
   return (
     <Routes>
-      <Route path="/" element={<LandingPage />} />
+      <Route path="/" element={<RootRoute />} />
+      <Route path="/splash" element={<AnimatedSplashScreen />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />

@@ -7,13 +7,27 @@
   },
   "plugins": {
     "SplashScreen": {
-      "launchShowDuration": 2000,
-      "backgroundColor": "#E67E4C",
-      "showSpinner": false
+      "launchShowDuration": 3000,
+      "launchAutoHide": false,
+      "backgroundColor": "#FFFFFF",
+      "showSpinner": false,
+      "androidScaleType": "CENTER_CROP",
+      "splashFullScreen": true,
+      "splashImmersive": true
     },
     "StatusBar": {
       "style": "dark",
-      "backgroundColor": "#E67E4C"
+      "backgroundColor": "#FFFFFF"
+    },
+    "Keyboard": {
+      "resize": "body",
+      "style": "dark"
     }
+  },
+  "android": {
+    "allowMixedContent": true
+  },
+  "ios": {
+    "contentInset": "automatic"
   }
 }

@@ -1,5 +1,12 @@
 // Central configuration for API URLs
-// This ensures the app works both in development and production (including mobile builds)
+// This ensures the app works in development, production, and mobile builds
+//
+// For production deployment to odapto.com:
+//   Set REACT_APP_BACKEND_URL=https://odapto.com in frontend/.env
+//
+// For mobile builds (Capacitor):
+//   The fallback URL below is used when REACT_APP_BACKEND_URL is not available
+//   Update PRODUCTION_URL before building the APK/IPA
 
 const PRODUCTION_URL = 'https://task-board-app-3.preview.emergentagent.com';
 

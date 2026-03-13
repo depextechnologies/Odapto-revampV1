@@ -89,7 +89,18 @@ All P0 features completed including CORS fix.
 5. Board filters (by label, due date, member)
 6. Refactor `server.py` into modular FastAPI routers
 
-### Future (Mobile & Subscription)
+### Mobile App (Capacitor - READY FOR BUILD)
+- [x] Capacitor configured for Android and iOS (com.odapto.app v1.0.0)
+- [x] Animated splash screen (7s video on white background) -> Login flow
+- [x] Native splash screen config (white bg, immersive)
+- [x] App icon and splash logo generated (resources/)
+- [x] Backend URL configurable for production (config.js PRODUCTION_URL)
+- [x] Responsive login screen (mobile single-column, tablet split-view)
+- [x] Comprehensive MOBILE_BUILD.md with Android/iOS build instructions
+- [ ] User to build APK locally (Android Studio + `yarn build && npx cap sync`)
+- [ ] User to build IPA locally (Xcode + `yarn build && npx cap sync`)
+
+### Future (Subscription & Advanced)
 1. Android Tablet app (Play Store) - Capacitor configured
 2. iPad app (App Store) - Capacitor configured
 3. Subscription tiers (Free, Pro, Enterprise)
