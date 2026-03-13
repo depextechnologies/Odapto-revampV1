@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { apiGet, apiPost, apiDelete, apiPatch } from '../utils/api';
 import { API_BASE_URL } from '../config';
 import { ResponsiveLogo } from '../components/ThemeLogo';
+import GlobalSearch from '../components/GlobalSearch';
 import { 
   Plus, 
   LayoutGrid, 
@@ -293,6 +294,9 @@ export default function WorkspacePage() {
               <Link to="/" className="flex items-center gap-2">
                 <ResponsiveLogo className="h-8 w-auto" />
               </Link>
+              <div className="hidden md:block">
+                <GlobalSearch />
+              </div>
             </div>
 
             <div className="flex items-center gap-3">

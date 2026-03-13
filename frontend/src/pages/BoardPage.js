@@ -753,7 +753,17 @@ export default function BoardPage() {
     return name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'U';
   };
 
-  const onCardUpdate = (updatedCard) => {
+  const onCardUpdate = (updatedCard, isDuplicate) => {
+    if (isDuplicate) {
+      // Add the duplicated card to the same list
+      const newLists = board.lists.map(list => 
+        list.list_id === updatedCard.list_id 
+          ? { ...list, cards: [...list.cards, updatedCard] }
+          : list
+      );
+      setBoard({ ...board, lists: newLists });
+      return;
+    }
     const newLists = board.lists.map(list => ({
       ...list,
       cards: list.cards.map(card => 
@@ -1159,6 +1169,17 @@ export default function BoardPage() {
                                           </DropdownMenuItem>
                                         </DropdownMenuContent>
                                       </DropdownMenu>
+                                      
+                                      {/* Cover Image */}
+                                      {card.cover_image && (
+                                        <div className="mb-2 -mx-3 -mt-3 rounded-t-lg overflow-hidden">
+                                          <img 
+                                            src={card.cover_image.startsWith('http') ? card.cover_image : `${API_BASE}${card.cover_image}`} 
+                                            alt="" 
+                                            className="w-full h-32 object-cover"
+                                          />
+                                        </div>
+                                      )}
                                       
                                       {/* Labels */}
                                       {/* Labels */}

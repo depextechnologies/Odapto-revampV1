@@ -12,11 +12,11 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { toast } from 'sonner';
 import { apiGet, apiPost } from '../utils/api';
 import NotificationBell from '../components/NotificationBell';
+import GlobalSearch from '../components/GlobalSearch';
 import { ResponsiveLogo } from '../components/ThemeLogo';
 import { 
   Plus, 
   LayoutGrid, 
-  Search, 
   Moon, 
   Sun, 
   LogOut,
@@ -41,7 +41,6 @@ export default function DashboardPage() {
   
   const [workspaces, setWorkspaces] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
   const [newWorkspaceName, setNewWorkspaceName] = useState('');
   const [newWorkspaceDesc, setNewWorkspaceDesc] = useState('');
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -101,9 +100,7 @@ export default function DashboardPage() {
     navigate('/');
   };
 
-  const filteredWorkspaces = workspaces.filter(ws =>
-    ws.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredWorkspaces = workspaces;
 
   const getInitials = (name) => {
     return name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'U';
@@ -120,16 +117,8 @@ export default function DashboardPage() {
                 <ResponsiveLogo className="h-8 w-auto" />
               </Link>
               
-              <div className="hidden md:flex items-center gap-1 px-3 py-1.5 bg-muted rounded-lg">
-                <Search className="w-4 h-4 text-muted-foreground" />
-                <input
-                  type="text"
-                  placeholder="Search workspaces..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="bg-transparent border-none outline-none text-sm w-48 placeholder:text-muted-foreground"
-                  data-testid="search-input"
-                />
+              <div className="hidden md:block">
+                <GlobalSearch />
               </div>
             </div>
 
@@ -308,22 +297,18 @@ export default function DashboardPage() {
               <Folder className="w-10 h-10 text-muted-foreground" />
             </div>
             <h3 className="font-heading text-xl font-semibold mb-2">
-              {searchQuery ? 'No workspaces found' : 'No workspaces yet'}
+              No workspaces yet
             </h3>
             <p className="text-muted-foreground mb-6">
-              {searchQuery 
-                ? 'Try a different search term' 
-                : 'Create your first workspace to get started'}
+              Create your first workspace to get started
             </p>
-            {!searchQuery && (
-              <Button 
-                onClick={() => setCreateDialogOpen(true)}
-                className="bg-odapto-orange hover:bg-odapto-orange-hover text-white"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Create Workspace
-              </Button>
-            )}
+            <Button 
+              onClick={() => setCreateDialogOpen(true)}
+              className="bg-odapto-orange hover:bg-odapto-orange-hover text-white"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Create Workspace
+            </Button>
           </motion.div>
         ) : (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">

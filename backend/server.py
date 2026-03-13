@@ -37,6 +37,15 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 # Create the main app
 app = FastAPI(title="Odapto API", version="1.0.0")
 
+# CORS middleware - allow all origins, no credentials needed (frontend uses Bearer tokens)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
@@ -328,12 +337,11 @@ def verify_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode(), hashed.encode())
 
 async def get_current_user(request: Request) -> User:
-    # Check cookie first, then Authorization header
-    session_token = request.cookies.get("session_token")
-    if not session_token:
-        auth_header = request.headers.get("Authorization")
-        if auth_header and auth_header.startswith("Bearer "):
-            session_token = auth_header.split(" ")[1]
+    # Get session token from Authorization header
+    auth_header = request.headers.get("Authorization")
+    session_token = None
+    if auth_header and auth_header.startswith("Bearer "):
+        session_token = auth_header.split(" ")[1]
     
     if not session_token:
         raise HTTPException(status_code=401, detail="Not authenticated")
@@ -400,7 +408,7 @@ async def log_card_activity(
 # ============== AUTH ROUTES ==============
 
 @api_router.post("/auth/register")
-async def register(data: UserCreate, response: Response):
+async def register(data: UserCreate):
     existing = await db.users.find_one({"email": data.email}, {"_id": 0})
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -432,16 +440,6 @@ async def register(data: UserCreate, response: Response):
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.user_sessions.insert_one(session_doc)
-    
-    response.set_cookie(
-        key="session_token",
-        value=session_token,
-        httponly=True,
-        secure=True,
-        samesite="none",
-        path="/",
-        max_age=7*24*60*60
-    )
     
     # Process pending invites for this email
     pending_invites = await db.pending_invites.find({"email": data.email}).to_list(100)
@@ -481,7 +479,7 @@ async def register(data: UserCreate, response: Response):
     return {"user_id": user_id, "email": data.email, "name": data.name, "role": role, "session_token": session_token}
 
 @api_router.post("/auth/login")
-async def login(data: UserLogin, response: Response):
+async def login(data: UserLogin):
     user = await db.users.find_one({"email": data.email}, {"_id": 0})
     if not user or not verify_password(data.password, user.get("password_hash", "")):
         raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -495,16 +493,6 @@ async def login(data: UserLogin, response: Response):
     }
     await db.user_sessions.insert_one(session_doc)
     
-    response.set_cookie(
-        key="session_token",
-        value=session_token,
-        httponly=True,
-        secure=True,
-        samesite="none",
-        path="/",
-        max_age=7*24*60*60
-    )
-    
     return {
         "user_id": user["user_id"],
         "email": user["email"],
@@ -516,7 +504,7 @@ async def login(data: UserLogin, response: Response):
 
 # REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
 @api_router.post("/auth/session")
-async def process_oauth_session(request: Request, response: Response):
+async def process_oauth_session(request: Request):
     body = await request.json()
     session_id = body.get("session_id")
     
@@ -570,16 +558,6 @@ async def process_oauth_session(request: Request, response: Response):
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.user_sessions.insert_one(session_doc)
-    
-    response.set_cookie(
-        key="session_token",
-        value=session_token,
-        httponly=True,
-        secure=True,
-        samesite="none",
-        path="/",
-        max_age=7*24*60*60
-    )
     
     return {
         "user_id": user_id,
@@ -740,18 +718,15 @@ async def reset_password(data: ResetPasswordRequest):
     return {"message": "Password reset successfully"}
 
 @api_router.post("/auth/logout")
-async def logout(request: Request, response: Response):
-    # Check cookie first, then Authorization header
-    session_token = request.cookies.get("session_token")
-    if not session_token:
-        auth_header = request.headers.get("Authorization")
-        if auth_header and auth_header.startswith("Bearer "):
-            session_token = auth_header.split(" ")[1]
+async def logout(request: Request):
+    auth_header = request.headers.get("Authorization")
+    session_token = None
+    if auth_header and auth_header.startswith("Bearer "):
+        session_token = auth_header.split(" ")[1]
     
     if session_token:
         await db.user_sessions.delete_one({"session_token": session_token})
     
-    response.delete_cookie(key="session_token", path="/", samesite="none", secure=True)
     return {"message": "Logged out"}
 
 # ============== USER MANAGEMENT (ADMIN) ==============
@@ -2719,6 +2694,167 @@ async def upload_attachment(card_id: str, file: UploadFile = File(...), user: Us
     
     return attachment
 
+@api_router.delete("/cards/{card_id}/attachments/{file_id}")
+async def delete_attachment(card_id: str, file_id: str, user: User = Depends(get_current_user)):
+    card = await db.cards.find_one({"card_id": card_id}, {"_id": 0})
+    if not card:
+        raise HTTPException(status_code=404, detail="Card not found")
+    
+    board = await db.boards.find_one({"board_id": card["board_id"]}, {"_id": 0})
+    workspace = await db.workspaces.find_one(
+        {"workspace_id": board["workspace_id"], "members.user_id": user.user_id},
+        {"_id": 0}
+    )
+    if not workspace:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Find the attachment
+    attachment = next((a for a in card.get("attachments", []) if a["file_id"] == file_id), None)
+    if not attachment:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    
+    # Remove from card
+    await db.cards.update_one(
+        {"card_id": card_id},
+        {"$pull": {"attachments": {"file_id": file_id}}}
+    )
+    
+    # If this attachment was the cover, clear it
+    if card.get("cover_image") == attachment.get("url"):
+        await db.cards.update_one({"card_id": card_id}, {"$set": {"cover_image": None}})
+    
+    # Delete file from disk
+    filename = attachment["url"].split("/")[-1]
+    file_path = UPLOAD_DIR / filename
+    if file_path.exists():
+        file_path.unlink()
+    
+    await log_card_activity(
+        card_id=card_id, board_id=board["board_id"], user=user,
+        action="deleted_attachment", details={"filename": attachment["filename"]}
+    )
+    
+    return {"message": "Attachment deleted"}
+
+@api_router.patch("/cards/{card_id}/cover")
+async def set_card_cover(card_id: str, request: Request, user: User = Depends(get_current_user)):
+    body = await request.json()
+    cover_url = body.get("cover_image")
+    
+    card = await db.cards.find_one({"card_id": card_id}, {"_id": 0})
+    if not card:
+        raise HTTPException(status_code=404, detail="Card not found")
+    
+    board = await db.boards.find_one({"board_id": card["board_id"]}, {"_id": 0})
+    workspace = await db.workspaces.find_one(
+        {"workspace_id": board["workspace_id"], "members.user_id": user.user_id},
+        {"_id": 0}
+    )
+    if not workspace:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    await db.cards.update_one(
+        {"card_id": card_id},
+        {"$set": {"cover_image": cover_url}}
+    )
+    
+    await log_card_activity(
+        card_id=card_id, board_id=board["board_id"], user=user,
+        action="set_cover", details={"cover_image": cover_url}
+    )
+    
+    await manager.broadcast(board["board_id"], {
+        "type": "card_updated", "card_id": card_id,
+        "updates": {"cover_image": cover_url}
+    })
+    
+    return {"cover_image": cover_url}
+
+@api_router.delete("/cards/{card_id}/checklist/{item_id}")
+async def delete_checklist_item(card_id: str, item_id: str, user: User = Depends(get_current_user)):
+    card = await db.cards.find_one({"card_id": card_id}, {"_id": 0})
+    if not card:
+        raise HTTPException(status_code=404, detail="Card not found")
+    
+    board = await db.boards.find_one({"board_id": card["board_id"]}, {"_id": 0})
+    workspace = await db.workspaces.find_one(
+        {"workspace_id": board["workspace_id"], "members.user_id": user.user_id},
+        {"_id": 0}
+    )
+    if not workspace:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    item = next((i for i in card.get("checklist", []) if i["item_id"] == item_id), None)
+    if not item:
+        raise HTTPException(status_code=404, detail="Checklist item not found")
+    
+    await db.cards.update_one(
+        {"card_id": card_id},
+        {"$pull": {"checklist": {"item_id": item_id}}}
+    )
+    
+    await log_card_activity(
+        card_id=card_id, board_id=board["board_id"], user=user,
+        action="deleted_checklist_item", details={"item_text": item["text"]}
+    )
+    
+    await manager.broadcast(board["board_id"], {
+        "type": "checklist_item_deleted", "card_id": card_id, "item_id": item_id
+    })
+    
+    return {"message": "Checklist item deleted"}
+
+@api_router.post("/cards/{card_id}/duplicate")
+async def duplicate_card(card_id: str, user: User = Depends(get_current_user)):
+    card = await db.cards.find_one({"card_id": card_id}, {"_id": 0})
+    if not card:
+        raise HTTPException(status_code=404, detail="Card not found")
+    
+    board = await db.boards.find_one({"board_id": card["board_id"]}, {"_id": 0})
+    workspace = await db.workspaces.find_one(
+        {"workspace_id": board["workspace_id"], "members.user_id": user.user_id},
+        {"_id": 0}
+    )
+    if not workspace:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    new_card_id = f"card_{uuid.uuid4().hex[:12]}"
+    new_card = {
+        "card_id": new_card_id,
+        "list_id": card["list_id"],
+        "board_id": card["board_id"],
+        "workspace_id": card.get("workspace_id", board["workspace_id"]),
+        "title": f"{card['title']} (copy)",
+        "description": card.get("description", ""),
+        "due_date": card.get("due_date"),
+        "labels": card.get("labels", []),
+        "priority": card.get("priority"),
+        "assigned_members": [],
+        "attachments": [],
+        "checklist": [
+            {"item_id": f"chk_{uuid.uuid4().hex[:8]}", "text": item["text"], "completed": False}
+            for item in card.get("checklist", [])
+        ],
+        "comments": [],
+        "cover_image": None,
+        "position": (card.get("position", 0) + 1),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.cards.insert_one(new_card)
+    new_card.pop("_id", None)
+    
+    await log_card_activity(
+        card_id=new_card_id, board_id=board["board_id"], user=user,
+        action="created", details={"list_name": "duplicated from " + card["title"]}
+    )
+    
+    await manager.broadcast(board["board_id"], {
+        "type": "card_created", "card": new_card
+    })
+    
+    return new_card
+
 @api_router.get("/files/{filename}")
 async def get_file(filename: str):
     file_path = UPLOAD_DIR / filename
@@ -2906,28 +3042,6 @@ async def serve_upload(folder: str, filename: str):
 
 # Include the router in the main app
 app.include_router(api_router)
-
-# Custom CORS middleware to handle credentials properly
-@app.middleware("http")
-async def add_cors_headers(request: Request, call_next):
-    # Handle preflight OPTIONS requests
-    if request.method == "OPTIONS":
-        response = Response(status_code=204)
-    else:
-        response = await call_next(request)
-    
-    # Get the origin from the request
-    origin = request.headers.get("origin", "*")
-    
-    # Set CORS headers
-    response.headers["Access-Control-Allow-Origin"] = origin
-    response.headers["Access-Control-Allow-Credentials"] = "true"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With, Accept, Origin"
-    response.headers["Access-Control-Expose-Headers"] = "*"
-    response.headers["Access-Control-Max-Age"] = "3600"
-    
-    return response
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

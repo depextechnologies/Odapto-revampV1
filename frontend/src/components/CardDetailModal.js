@@ -28,7 +28,13 @@ import {
   User,
   Edit3,
   Move,
-  AlertCircle
+  AlertCircle,
+  Eye,
+  Download,
+  FileText,
+  File as FileIcon,
+  Image as ImageIcon,
+  Copy
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 
@@ -370,6 +376,72 @@ export const CardDetailModal = ({ card, onClose, onUpdate, onDelete }) => {
     }
   };
 
+  const deleteAttachment = async (fileId) => {
+    if (!window.confirm('Delete this attachment?')) return;
+    try {
+      const response = await apiDelete(`/cards/${card.card_id}/attachments/${fileId}`);
+      if (response.ok) {
+        const updated = attachments.filter(a => a.file_id !== fileId);
+        setAttachments(updated);
+        onUpdate({ ...card, attachments: updated });
+        toast.success('Attachment deleted');
+      } else {
+        toast.error('Failed to delete attachment');
+      }
+    } catch (error) {
+      console.error('Failed to delete attachment:', error);
+      toast.error('Failed to delete attachment');
+    }
+  };
+
+  const setAsCover = async (attachmentUrl) => {
+    try {
+      const response = await apiPatch(`/cards/${card.card_id}/cover`, { cover_image: attachmentUrl });
+      if (response.ok) {
+        onUpdate({ ...card, cover_image: attachmentUrl });
+        toast.success('Cover image set');
+      } else {
+        toast.error('Failed to set cover');
+      }
+    } catch (error) {
+      console.error('Failed to set cover:', error);
+      toast.error('Failed to set cover');
+    }
+  };
+
+  const deleteChecklistItem = async (itemId) => {
+    try {
+      const response = await apiDelete(`/cards/${card.card_id}/checklist/${itemId}`);
+      if (response.ok) {
+        const updated = checklist.filter(i => i.item_id !== itemId);
+        setChecklist(updated);
+        onUpdate({ ...card, checklist: updated });
+        toast.success('Item removed');
+      } else {
+        toast.error('Failed to delete item');
+      }
+    } catch (error) {
+      console.error('Failed to delete checklist item:', error);
+    }
+  };
+
+  const duplicateCard = async () => {
+    try {
+      const response = await apiPost(`/cards/${card.card_id}/duplicate`);
+      if (response.ok) {
+        const newCard = await response.json();
+        onUpdate(newCard, true);
+        toast.success('Card duplicated');
+        onClose();
+      } else {
+        toast.error('Failed to duplicate card');
+      }
+    } catch (error) {
+      console.error('Failed to duplicate card:', error);
+      toast.error('Failed to duplicate card');
+    }
+  };
+
   const completedCount = checklist.filter(item => item.completed).length;
 
   const getInitials = (name) => {
@@ -618,18 +690,20 @@ export const CardDetailModal = ({ card, onClose, onUpdate, onDelete }) => {
                           {isImage && (
                             <button
                               type="button"
-                              onClick={() => toast.info('Set as cover - Coming soon!')}
+                              onClick={() => setAsCover(att.url)}
                               className="p-2 bg-white/20 rounded-lg hover:bg-white/30 transition-colors"
                               title="Set as Cover"
+                              data-testid={`set-cover-btn-${idx}`}
                             >
                               <ImageIcon className="w-4 h-4 text-white" />
                             </button>
                           )}
                           <button
                             type="button"
-                            onClick={() => toast.info('Delete attachment - Coming soon!')}
+                            onClick={() => deleteAttachment(att.file_id)}
                             className="p-2 bg-red-500/80 rounded-lg hover:bg-red-600 transition-colors"
                             title="Delete"
+                            data-testid={`delete-attachment-btn-${idx}`}
                           >
                             <Trash2 className="w-4 h-4 text-white" />
                           </button>
@@ -685,14 +759,21 @@ export const CardDetailModal = ({ card, onClose, onUpdate, onDelete }) => {
 
               <div className="space-y-2">
                 {checklist.map((item) => (
-                  <div key={item.item_id} className="flex items-center gap-3">
+                  <div key={item.item_id} className="flex items-center gap-3 group">
                     <Checkbox
                       checked={item.completed}
                       onCheckedChange={() => toggleChecklistItem(item.item_id)}
                     />
-                    <span className={item.completed ? 'line-through text-muted-foreground' : ''}>
+                    <span className={`flex-1 ${item.completed ? 'line-through text-muted-foreground' : ''}`}>
                       {item.text}
                     </span>
+                    <button
+                      onClick={() => deleteChecklistItem(item.item_id)}
+                      className="opacity-0 group-hover:opacity-100 p-1 hover:bg-destructive/10 rounded transition-all"
+                      data-testid={`delete-checklist-item-${item.item_id}`}
+                    >
+                      <X className="w-3 h-3 text-destructive" />
+                    </button>
                   </div>
                 ))}
               </div>
@@ -870,6 +951,15 @@ export const CardDetailModal = ({ card, onClose, onUpdate, onDelete }) => {
                 data-testid="save-card-btn"
               >
                 {saving ? 'Saving...' : 'Save Changes'}
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={duplicateCard}
+                className="w-full"
+                data-testid="duplicate-card-btn"
+              >
+                <Copy className="w-4 h-4 mr-2" />
+                Duplicate Card
               </Button>
               <Button 
                 variant="outline" 
