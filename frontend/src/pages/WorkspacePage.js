@@ -40,7 +40,8 @@ import {
   KeyRound,
   HelpCircle,
   Crown,
-  Shield
+  Shield,
+  Layers
 } from 'lucide-react';
 
 const BOARD_COLORS = [
@@ -72,6 +73,12 @@ export default function WorkspacePage() {
   const [newTeamDescription, setNewTeamDescription] = useState('');
   const [creating, setCreating] = useState(false);
   const [activeTab, setActiveTab] = useState('all');
+  
+  // Template selection state
+  const [createMode, setCreateMode] = useState('blank'); // 'blank' or 'template'
+  const [templates, setTemplates] = useState([]);
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
 
   useEffect(() => {
     fetchWorkspaceData();
@@ -118,41 +125,88 @@ export default function WorkspacePage() {
 
   const isOwner = workspace?.owner_id === user?.user_id;
 
+  // Fetch templates when dialog opens
+  const fetchTemplates = async () => {
+    setLoadingTemplates(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/templates`);
+      if (response.ok) {
+        setTemplates(await response.json());
+      }
+    } catch (error) {
+      console.error('Failed to fetch templates:', error);
+    } finally {
+      setLoadingTemplates(false);
+    }
+  };
+
+  const openCreateDialog = () => {
+    setCreateMode('blank');
+    setSelectedTemplate(null);
+    setNewBoardName('');
+    setNewBoardColor(BOARD_COLORS[0]);
+    setNewBoardTeamId('');
+    fetchTemplates();
+    setCreateDialogOpen(true);
+  };
+
   const createBoard = async (e) => {
     e.preventDefault();
     if (!newBoardName.trim()) return;
 
     setCreating(true);
     try {
-      const response = await apiPost(`/workspaces/${workspaceId}/boards`, {
-        name: newBoardName,
-        background: newBoardColor
-      });
-
-      if (response.ok) {
-        const board = await response.json();
+      let board;
+      
+      if (createMode === 'template' && selectedTemplate) {
+        // Create board from template
+        const response = await apiPost(`/templates/${selectedTemplate.board_id}/use`, {
+          workspace_id: workspaceId,
+          board_name: newBoardName
+        });
         
-        // Assign to team if selected
-        if (newBoardTeamId) {
-          await apiPatch(`/boards/${board.board_id}/team`, { team_id: newBoardTeamId });
-          board.team_id = newBoardTeamId;
-          board.category = 'team';
-          const team = teams.find(t => t.team_id === newBoardTeamId);
-          board.team_name = team?.name;
+        if (response.ok) {
+          board = await response.json();
         } else {
-          board.category = 'personal';
+          const error = await response.json();
+          toast.error(error.detail || 'Failed to create board from template');
+          return;
         }
-        
-        setBoards([...boards, board]);
-        setNewBoardName('');
-        setNewBoardColor(BOARD_COLORS[0]);
-        setNewBoardTeamId('');
-        setCreateDialogOpen(false);
-        toast.success('Board created!');
       } else {
-        const error = await response.json();
-        toast.error(error.detail || 'Failed to create board');
+        // Create blank board
+        const response = await apiPost(`/workspaces/${workspaceId}/boards`, {
+          name: newBoardName,
+          background: newBoardColor
+        });
+
+        if (response.ok) {
+          board = await response.json();
+        } else {
+          const error = await response.json();
+          toast.error(error.detail || 'Failed to create board');
+          return;
+        }
       }
+      
+      // Assign to team if selected
+      if (newBoardTeamId) {
+        await apiPatch(`/boards/${board.board_id}/team`, { team_id: newBoardTeamId });
+        board.team_id = newBoardTeamId;
+        board.category = 'team';
+        const team = teams.find(t => t.team_id === newBoardTeamId);
+        board.team_name = team?.name;
+      } else {
+        board.category = 'personal';
+      }
+      
+      setBoards([...boards, board]);
+      setNewBoardName('');
+      setNewBoardColor(BOARD_COLORS[0]);
+      setNewBoardTeamId('');
+      setSelectedTemplate(null);
+      setCreateMode('blank');
+      setCreateDialogOpen(false);
+      toast.success('Board created!');
     } catch (error) {
       console.error('Failed to create board:', error);
       toast.error('Failed to create board');
@@ -390,17 +444,90 @@ export default function WorkspacePage() {
                 <Button 
                   className="bg-odapto-orange hover:bg-odapto-orange-hover text-white"
                   data-testid="create-board-btn"
+                  onClick={openCreateDialog}
                 >
                   <Plus className="w-4 h-4 mr-2" />
                   New Board
                 </Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent className="max-w-2xl">
                 <DialogHeader>
                   <DialogTitle>Create Board</DialogTitle>
-                  <DialogDescription>Create a new board to organize your tasks.</DialogDescription>
+                  <DialogDescription>Start fresh or use a template to get started quickly.</DialogDescription>
                 </DialogHeader>
+                
+                {/* Mode Selection Tabs */}
+                <div className="flex gap-2 mt-4">
+                  <button
+                    type="button"
+                    onClick={() => { setCreateMode('blank'); setSelectedTemplate(null); }}
+                    className={`flex-1 p-3 rounded-lg border-2 transition-all ${
+                      createMode === 'blank' 
+                        ? 'border-odapto-orange bg-odapto-orange/5' 
+                        : 'border-border hover:border-muted-foreground'
+                    }`}
+                  >
+                    <LayoutGrid className={`w-5 h-5 mx-auto mb-1 ${createMode === 'blank' ? 'text-odapto-orange' : ''}`} />
+                    <p className="text-sm font-medium">Blank Board</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCreateMode('template')}
+                    className={`flex-1 p-3 rounded-lg border-2 transition-all ${
+                      createMode === 'template' 
+                        ? 'border-odapto-orange bg-odapto-orange/5' 
+                        : 'border-border hover:border-muted-foreground'
+                    }`}
+                  >
+                    <Layers className={`w-5 h-5 mx-auto mb-1 ${createMode === 'template' ? 'text-odapto-orange' : ''}`} />
+                    <p className="text-sm font-medium">From Template</p>
+                  </button>
+                </div>
+
                 <form onSubmit={createBoard} className="space-y-4 mt-4">
+                  {/* Template Selection (when template mode) */}
+                  {createMode === 'template' && (
+                    <div className="space-y-2">
+                      <Label>Choose Template</Label>
+                      {loadingTemplates ? (
+                        <div className="flex justify-center py-8">
+                          <div className="w-6 h-6 border-2 border-odapto-orange border-t-transparent rounded-full animate-spin" />
+                        </div>
+                      ) : templates.length === 0 ? (
+                        <p className="text-sm text-muted-foreground py-4 text-center">
+                          No templates available. <Link to="/templates" className="text-odapto-orange hover:underline">Browse templates</Link>
+                        </p>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+                          {templates.map((template) => (
+                            <button
+                              key={template.board_id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedTemplate(template);
+                                if (!newBoardName) setNewBoardName(template.template_name || '');
+                              }}
+                              className={`p-3 rounded-lg border text-left transition-all ${
+                                selectedTemplate?.board_id === template.board_id
+                                  ? 'border-odapto-orange bg-odapto-orange/5'
+                                  : 'border-border hover:border-muted-foreground'
+                              }`}
+                            >
+                              <div 
+                                className="w-full h-8 rounded mb-2"
+                                style={{ backgroundColor: template.background || '#3A8B84' }}
+                              />
+                              <p className="text-sm font-medium truncate">{template.template_name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {template.list_count || 0} lists · {template.card_count || 0} cards
+                              </p>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div className="space-y-2">
                     <Label htmlFor="board-name">Board Name</Label>
                     <Input
@@ -412,22 +539,27 @@ export default function WorkspacePage() {
                       data-testid="board-name-input"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label>Board Color</Label>
-                    <div className="flex flex-wrap gap-2">
-                      {BOARD_COLORS.map((color) => (
-                        <button
-                          key={color}
-                          type="button"
-                          onClick={() => setNewBoardColor(color)}
-                          className={`w-8 h-8 rounded-lg transition-all ${
-                            newBoardColor === color ? 'ring-2 ring-offset-2 ring-foreground' : ''
-                          }`}
-                          style={{ backgroundColor: color }}
-                        />
-                      ))}
+                  
+                  {/* Color picker only for blank boards */}
+                  {createMode === 'blank' && (
+                    <div className="space-y-2">
+                      <Label>Board Color</Label>
+                      <div className="flex flex-wrap gap-2">
+                        {BOARD_COLORS.map((color) => (
+                          <button
+                            key={color}
+                            type="button"
+                            onClick={() => setNewBoardColor(color)}
+                            className={`w-8 h-8 rounded-lg transition-all ${
+                              newBoardColor === color ? 'ring-2 ring-offset-2 ring-foreground' : ''
+                            }`}
+                            style={{ backgroundColor: color }}
+                          />
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  )}
+                  
                   {teams.length > 0 && (
                     <div className="space-y-2">
                       <Label>Assign to Team (optional)</Label>
@@ -446,17 +578,18 @@ export default function WorkspacePage() {
                       </Select>
                     </div>
                   )}
-                  <div className="flex justify-end gap-3">
+                  
+                  <div className="flex justify-end gap-3 pt-2">
                     <Button type="button" variant="outline" onClick={() => setCreateDialogOpen(false)}>
                       Cancel
                     </Button>
                     <Button 
                       type="submit" 
                       className="bg-odapto-orange hover:bg-odapto-orange-hover text-white"
-                      disabled={creating}
+                      disabled={creating || (createMode === 'template' && !selectedTemplate)}
                       data-testid="create-board-submit-btn"
                     >
-                      {creating ? 'Creating...' : 'Create'}
+                      {creating ? 'Creating...' : 'Create Board'}
                     </Button>
                   </div>
                 </form>
@@ -514,7 +647,7 @@ export default function WorkspacePage() {
                   </p>
                   {(tabKey === 'all' || tabKey === 'personal') && (
                     <Button 
-                      onClick={() => setCreateDialogOpen(true)}
+                      onClick={openCreateDialog}
                       className="bg-odapto-orange hover:bg-odapto-orange-hover text-white"
                     >
                       <Plus className="w-4 h-4 mr-2" />
@@ -613,7 +746,7 @@ export default function WorkspacePage() {
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: categorizedBoards[tabKey].length * 0.05 }}
-                      onClick={() => setCreateDialogOpen(true)}
+                      onClick={openCreateDialog}
                       className="h-36 rounded-xl border-2 border-dashed border-border hover:border-odapto-orange/50 flex items-center justify-center gap-2 text-muted-foreground hover:text-odapto-orange transition-colors"
                       data-testid="add-board-card"
                     >

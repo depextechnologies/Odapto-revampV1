@@ -552,38 +552,112 @@ export const CardDetailModal = ({ card, onClose, onUpdate, onDelete }) => {
               <Label className="flex items-center gap-2">
                 <Paperclip className="w-4 h-4" />
                 Attachments
+                {attachments.length > 0 && (
+                  <span className="text-muted-foreground text-xs">({attachments.length})</span>
+                )}
               </Label>
               <input
                 type="file"
                 ref={fileInputRef}
                 onChange={handleFileUpload}
                 className="hidden"
+                accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip"
               />
-              <div className="space-y-2">
-                {attachments.map((att, idx) => (
-                  <div key={idx} className="flex items-center gap-2 p-2 bg-muted rounded-lg">
-                    <Paperclip className="w-4 h-4 text-muted-foreground" />
-                    <a 
-                      href={`${API_BASE}${att.url}`} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-sm text-odapto-orange hover:underline flex-1"
-                    >
-                      {att.filename}
-                    </a>
-                    <span className="text-xs text-muted-foreground">
-                      {new Date(att.uploaded_at).toLocaleDateString()}
-                    </span>
-                  </div>
-                ))}
+              <div className="space-y-3">
+                {attachments.map((att, idx) => {
+                  const isImage = att.filename?.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+                  const isPdf = att.filename?.match(/\.pdf$/i);
+                  const fileUrl = att.url?.startsWith('http') ? att.url : `${API_BASE}${att.url}`;
+                  
+                  return (
+                    <div key={idx} className="group border border-border rounded-lg overflow-hidden hover:border-odapto-orange/50 transition-colors">
+                      {/* Preview Area */}
+                      <div className="relative">
+                        {isImage ? (
+                          <div className="h-32 bg-muted flex items-center justify-center overflow-hidden">
+                            <img 
+                              src={fileUrl} 
+                              alt={att.filename}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        ) : (
+                          <div className="h-20 bg-muted flex items-center justify-center">
+                            <div className="text-center">
+                              {isPdf ? (
+                                <FileText className="w-8 h-8 mx-auto text-red-500 mb-1" />
+                              ) : (
+                                <FileIcon className="w-8 h-8 mx-auto text-muted-foreground mb-1" />
+                              )}
+                              <span className="text-xs text-muted-foreground uppercase">
+                                {att.filename?.split('.').pop()}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Hover Actions Overlay */}
+                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                          <a
+                            href={fileUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-2 bg-white/20 rounded-lg hover:bg-white/30 transition-colors"
+                            title="View"
+                          >
+                            <Eye className="w-4 h-4 text-white" />
+                          </a>
+                          <a
+                            href={fileUrl}
+                            download={att.filename}
+                            className="p-2 bg-white/20 rounded-lg hover:bg-white/30 transition-colors"
+                            title="Download"
+                          >
+                            <Download className="w-4 h-4 text-white" />
+                          </a>
+                          {isImage && (
+                            <button
+                              type="button"
+                              onClick={() => toast.info('Set as cover - Coming soon!')}
+                              className="p-2 bg-white/20 rounded-lg hover:bg-white/30 transition-colors"
+                              title="Set as Cover"
+                            >
+                              <ImageIcon className="w-4 h-4 text-white" />
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => toast.info('Delete attachment - Coming soon!')}
+                            className="p-2 bg-red-500/80 rounded-lg hover:bg-red-600 transition-colors"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-4 h-4 text-white" />
+                          </button>
+                        </div>
+                      </div>
+                      
+                      {/* File Info */}
+                      <div className="p-2 flex items-center justify-between">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{att.filename}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(att.uploaded_at).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                
                 <Button 
                   variant="outline" 
                   size="sm"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={uploading}
+                  className="w-full"
                 >
                   <Upload className="w-4 h-4 mr-2" />
-                  {uploading ? 'Uploading...' : 'Upload File'}
+                  {uploading ? 'Uploading...' : 'Add Attachment'}
                 </Button>
               </div>
             </div>

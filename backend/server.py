@@ -690,7 +690,7 @@ async def forgot_password(data: ForgotPasswordRequest):
     })
     
     # Send email with reset link
-    reset_link = f"{os.environ.get('FRONTEND_URL', 'https://task-sync-hub-16.preview.emergentagent.com')}/reset-password?token={reset_token}"
+    reset_link = f"{os.environ.get('FRONTEND_URL', 'https://task-board-app-3.preview.emergentagent.com')}/reset-password?token={reset_token}"
     
     try:
         from services.email_service import send_password_reset_email
@@ -1069,7 +1069,7 @@ async def add_workspace_member(workspace_id: str, request: Request, user: User =
     await db.invitation_tokens.insert_one(invitation_doc)
     
     # Generate invitation link
-    frontend_url = os.environ.get('FRONTEND_URL', 'https://task-sync-hub-16.preview.emergentagent.com')
+    frontend_url = os.environ.get('FRONTEND_URL', 'https://task-board-app-3.preview.emergentagent.com')
     invitation_link = f"{frontend_url}/invite/accept?token={token}"
     
     # Send email
@@ -1562,7 +1562,7 @@ async def invite_board_member(board_id: str, data: BoardInviteRequest, user: Use
     await db.invitation_tokens.insert_one(invitation_doc)
     
     # Generate invitation link
-    frontend_url = os.environ.get('FRONTEND_URL', 'https://task-sync-hub-16.preview.emergentagent.com')
+    frontend_url = os.environ.get('FRONTEND_URL', 'https://task-board-app-3.preview.emergentagent.com')
     invitation_link = f"{frontend_url}/invite/accept?token={token}"
     
     # Send email
@@ -2183,7 +2183,7 @@ async def invite_card_member(card_id: str, data: CardInviteRequest, user: User =
     await db.pending_invites.insert_one(pending_invite)
     
     # Generate invitation link
-    frontend_url = os.environ.get('FRONTEND_URL', 'https://task-sync-hub-16.preview.emergentagent.com')
+    frontend_url = os.environ.get('FRONTEND_URL', 'https://task-board-app-3.preview.emergentagent.com')
     invitation_link = f"{frontend_url}/invite/accept?token={token}"
     
     # Send email
