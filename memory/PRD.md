@@ -5,11 +5,12 @@ Odapto is a production-grade Kanban-based work management SaaS similar to Trello
 
 ## What's Been Implemented (Updated Mar 13, 2026)
 
-### Backend (FastAPI)
+### Authentication
 - [x] Email/Password registration and login
-- [x] Google OAuth via Emergent Auth integration
+- [x] Direct Google OAuth via own Google Cloud credentials (WHITE-LABELED)
 - [x] JWT-like session management with tokens
 - [x] Role-based access control middleware
+- [x] Removed all Emergent-hosted auth references
 - [x] Workspace CRUD with member management
 - [x] Board CRUD with background colors AND images
 - [x] Board member invitation with notifications
@@ -36,6 +37,8 @@ Odapto is a production-grade Kanban-based work management SaaS similar to Trello
 - [x] Card Activity Logging
 - [x] CORS fix - standard CORSMiddleware with allow_origins=["*"], no credentials (NEW)
 - [x] Board/Card invite auto-adds user to workspace (BUG FIX - invited users now see workspaces)
+- [x] Real-time board activity notifications for all board members (comments, attachments, checklist, etc.)
+- [x] Email invitations sent to existing users when invited to boards
 
 ### Frontend (React)
 - [x] New Odapto Logo (light/dark mode)
@@ -114,7 +117,7 @@ All P0 features completed including CORS fix.
 - **Frontend**: React 18, Tailwind CSS, Shadcn UI, @hello-pangea/dnd
 - **Backend**: FastAPI (Python), Motor (async MongoDB), bcrypt, httpx
 - **Database**: MongoDB
-- **Auth**: Session tokens + Emergent Google OAuth
+- **Auth**: Direct Google OAuth (own credentials) + Session tokens
 - **Email**: Gmail SMTP (smtp.gmail.com:587 with STARTTLS)
 - **Real-time**: WebSockets (FastAPI)
 - **Storage**: Local file storage (MVP)
