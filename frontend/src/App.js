@@ -24,35 +24,33 @@ import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import TermsPage from './pages/TermsPage';
 import AnimatedSplashScreen from './components/AnimatedSplashScreen';
 
-// Auth callback component
-const AuthCallback = () => {
+// Google OAuth callback component
+const GoogleAuthCallback = () => {
   const navigate = useNavigate();
-  const { processOAuthCallback } = useAuth();
+  const { processGoogleCallback } = useAuth();
   const hasProcessed = useRef(false);
 
   useEffect(() => {
     if (hasProcessed.current) return;
     hasProcessed.current = true;
 
-    const hash = window.location.hash;
-    const params = new URLSearchParams(hash.substring(1));
-    const sessionId = params.get('session_id');
+    // Extract authorization code from URL query params
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
 
-    if (sessionId) {
-      processOAuthCallback(sessionId)
-        .then((user) => {
-          // Clear the hash and navigate
-          window.history.replaceState(null, '', window.location.pathname);
-          navigate('/dashboard', { replace: true, state: { user } });
+    if (code) {
+      processGoogleCallback(code)
+        .then(() => {
+          navigate('/dashboard', { replace: true });
         })
         .catch((error) => {
-          console.error('OAuth callback error:', error);
+          console.error('Google OAuth error:', error);
           navigate('/login', { replace: true });
         });
     } else {
       navigate('/login', { replace: true });
     }
-  }, [navigate, processOAuthCallback]);
+  }, [navigate, processGoogleCallback]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
@@ -100,19 +98,13 @@ const RootRoute = () => {
   return <LandingPage />;
 };
 
-// App router with session_id detection
+// App router
 const AppRouter = () => {
-  const location = useLocation();
-
-  // Check URL fragment for session_id synchronously during render
-  if (location.hash?.includes('session_id=')) {
-    return <AuthCallback />;
-  }
-
   return (
     <Routes>
       <Route path="/" element={<RootRoute />} />
       <Route path="/splash" element={<AnimatedSplashScreen />} />
+      <Route path="/auth/google/callback" element={<GoogleAuthCallback />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />

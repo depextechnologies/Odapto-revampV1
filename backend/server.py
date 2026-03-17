@@ -1,5 +1,5 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, WebSocket, WebSocketDisconnect, UploadFile, File, Request, Response
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -14,6 +14,7 @@ from datetime import datetime, timezone, timedelta
 import bcrypt
 import httpx
 import json
+from urllib.parse import urlencode
 
 # Import email service
 from services.email_service import (
@@ -381,9 +382,10 @@ async def log_card_activity(
     board_id: str,
     user: User,
     action: str,
-    details: Optional[Dict[str, Any]] = None
+    details: Optional[Dict[str, Any]] = None,
+    notify_members: bool = True
 ):
-    """Log a card activity and broadcast via WebSocket"""
+    """Log a card activity, broadcast via WebSocket, and optionally notify all board members"""
     activity = {
         "activity_id": f"act_{uuid.uuid4().hex[:12]}",
         "card_id": card_id,
@@ -402,6 +404,46 @@ async def log_card_activity(
         "type": "card_activity",
         "activity": {k: v for k, v in activity.items() if k != "_id"}
     })
+    
+    # Create notifications for all board members (except the actor)
+    if notify_members:
+        board = await db.boards.find_one({"board_id": board_id}, {"_id": 0, "members": 1, "name": 1})
+        if board:
+            card = await db.cards.find_one({"card_id": card_id}, {"_id": 0, "title": 1})
+            card_title = card["title"] if card else "a card"
+            
+            action_messages = {
+                "added_attachment": f"added an attachment to '{card_title}'",
+                "deleted_attachment": f"removed an attachment from '{card_title}'",
+                "set_cover": f"set cover image on '{card_title}'",
+                "added_checklist_item": f"added a checklist item on '{card_title}'",
+                "toggled_checklist_item": f"updated checklist on '{card_title}'",
+                "deleted_checklist_item": f"removed a checklist item from '{card_title}'",
+                "updated": f"updated '{card_title}'",
+                "created": f"created card '{card_title}'",
+                "moved": f"moved '{card_title}'",
+                "deleted": f"deleted '{card_title}'",
+                "member_added": f"added a member to '{card_title}'",
+            }
+            message = action_messages.get(action, f"performed '{action}' on '{card_title}'")
+            
+            for member in board.get("members", []):
+                member_id = member.get("user_id")
+                if member_id and member_id != user.user_id:
+                    notif = {
+                        "notification_id": f"notif_{uuid.uuid4().hex[:12]}",
+                        "user_id": member_id,
+                        "type": "board_activity",
+                        "title": f"Activity on {board['name']}",
+                        "message": f"{user.name} {message}",
+                        "board_id": board_id,
+                        "card_id": card_id,
+                        "from_user_id": user.user_id,
+                        "from_user_name": user.name,
+                        "read": False,
+                        "created_at": datetime.now(timezone.utc).isoformat()
+                    }
+                    await db.notifications.insert_one(notif)
     
     return activity
 
@@ -502,35 +544,98 @@ async def login(data: UserLogin):
         "session_token": session_token
     }
 
+# ============== GOOGLE OAUTH ==============
 # REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
-@api_router.post("/auth/session")
-async def process_oauth_session(request: Request):
+
+GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
+GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
+
+@api_router.get("/auth/google")
+async def google_login(request: Request):
+    """Initiate Google OAuth flow - redirects user to Google sign-in"""
+    client_id = os.environ.get("GOOGLE_CLIENT_ID")
+    if not client_id:
+        raise HTTPException(status_code=500, detail="Google OAuth not configured")
+    
+    # Build redirect URI from the request origin
+    frontend_url = os.environ.get("FRONTEND_URL", str(request.base_url).rstrip("/"))
+    redirect_uri = f"{frontend_url}/auth/google/callback"
+    
+    # Build Google OAuth URL
+    params = {
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": "openid email profile",
+        "access_type": "offline",
+        "prompt": "select_account",
+        "state": secrets.token_urlsafe(16)
+    }
+    google_url = f"{GOOGLE_AUTH_URL}?{urlencode(params)}"
+    return RedirectResponse(url=google_url)
+
+@api_router.post("/auth/google/callback")
+async def google_callback(request: Request):
+    """Exchange Google auth code for user info and create session"""
     body = await request.json()
-    session_id = body.get("session_id")
+    code = body.get("code")
+    redirect_uri = body.get("redirect_uri")
     
-    if not session_id:
-        raise HTTPException(status_code=400, detail="session_id required")
+    if not code:
+        raise HTTPException(status_code=400, detail="Authorization code required")
     
-    # Call Emergent Auth to get user data
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(
-            "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
-            headers={"X-Session-ID": session_id}
-        )
-        if resp.status_code != 200:
-            raise HTTPException(status_code=401, detail="Invalid session")
+    client_id = os.environ.get("GOOGLE_CLIENT_ID")
+    client_secret = os.environ.get("GOOGLE_CLIENT_SECRET")
+    
+    if not client_id or not client_secret:
+        raise HTTPException(status_code=500, detail="Google OAuth not configured")
+    
+    # Exchange authorization code for tokens
+    async with httpx.AsyncClient() as http_client:
+        token_resp = await http_client.post(GOOGLE_TOKEN_URL, data={
+            "code": code,
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "redirect_uri": redirect_uri,
+            "grant_type": "authorization_code"
+        })
         
-        oauth_data = resp.json()
+        if token_resp.status_code != 200:
+            raise HTTPException(status_code=401, detail="Failed to exchange authorization code")
+        
+        tokens = token_resp.json()
+        access_token = tokens.get("access_token")
+        
+        if not access_token:
+            raise HTTPException(status_code=401, detail="No access token received")
+        
+        # Get user info from Google
+        user_resp = await http_client.get(GOOGLE_USERINFO_URL, headers={
+            "Authorization": f"Bearer {access_token}"
+        })
+        
+        if user_resp.status_code != 200:
+            raise HTTPException(status_code=401, detail="Failed to get user info")
+        
+        google_user = user_resp.json()
+    
+    email = google_user.get("email")
+    name = google_user.get("name", email.split("@")[0])
+    picture = google_user.get("picture")
+    
+    if not email:
+        raise HTTPException(status_code=401, detail="No email in Google response")
     
     # Check if user exists
-    existing_user = await db.users.find_one({"email": oauth_data["email"]}, {"_id": 0})
+    existing_user = await db.users.find_one({"email": email}, {"_id": 0})
     
     if existing_user:
         user_id = existing_user["user_id"]
         # Update name and picture if changed
         await db.users.update_one(
             {"user_id": user_id},
-            {"$set": {"name": oauth_data["name"], "picture": oauth_data.get("picture")}}
+            {"$set": {"name": name, "picture": picture}}
         )
         role = existing_user.get("role", UserRole.NORMAL)
     else:
@@ -541,9 +646,9 @@ async def process_oauth_session(request: Request):
         
         user_doc = {
             "user_id": user_id,
-            "email": oauth_data["email"],
-            "name": oauth_data["name"],
-            "picture": oauth_data.get("picture"),
+            "email": email,
+            "name": name,
+            "picture": picture,
             "role": role,
             "created_at": datetime.now(timezone.utc).isoformat()
         }
@@ -561,10 +666,10 @@ async def process_oauth_session(request: Request):
     
     return {
         "user_id": user_id,
-        "email": oauth_data["email"],
-        "name": oauth_data["name"],
+        "email": email,
+        "name": name,
         "role": role,
-        "picture": oauth_data.get("picture"),
+        "picture": picture,
         "session_token": session_token
     }
 
@@ -1518,6 +1623,17 @@ async def invite_board_member(board_id: str, data: BoardInviteRequest, user: Use
         }
         await db.notifications.insert_one(notification)
         
+        # Send email invitation to existing user
+        frontend_url = os.environ.get('FRONTEND_URL', 'https://task-board-app-3.preview.emergentagent.com')
+        board_link = f"{frontend_url}/board/{board_id}"
+        email_result = await send_board_invitation_email(
+            to_email=invite_user["email"],
+            inviter_name=user.name,
+            board_name=board["name"],
+            role=data.role,
+            invitation_link=board_link
+        )
+        
         # Broadcast to WebSocket
         await manager.broadcast(board_id, {
             "type": "member_joined",
@@ -2299,13 +2415,14 @@ async def add_comment(card_id: str, data: CommentCreate, user: User = Depends(ge
         "comment": comment
     })
     
-    # Log activity
+    # Log activity (skip notification since we already notified above)
     await log_card_activity(
         card_id=card_id,
         board_id=board["board_id"],
         user=user,
         action="added_comment",
-        details={"comment_preview": data.content[:100]}
+        details={"comment_preview": data.content[:100]},
+        notify_members=False
     )
     
     return comment

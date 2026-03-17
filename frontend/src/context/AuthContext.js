@@ -129,25 +129,26 @@ export const AuthProvider = ({ children }) => {
     return userData;
   };
 
+  // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
   const loginWithGoogle = () => {
-    // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
-    const redirectUrl = window.location.origin + '/dashboard';
-    window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
+    // Redirect to our own backend which initiates the Google OAuth flow
+    window.location.href = `${API}/auth/google`;
   };
 
-  const processOAuthCallback = async (sessionId) => {
-    const response = await fetch(`${API}/auth/session`, {
+  const processGoogleCallback = async (code) => {
+    const redirectUri = window.location.origin + '/auth/google/callback';
+    const response = await fetch(`${API}/auth/google/callback`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: sessionId })
+      body: JSON.stringify({ code, redirect_uri: redirectUri })
     });
     
     if (!response.ok) {
-      throw new Error('OAuth session processing failed');
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.detail || 'Google sign-in failed');
     }
     
     const userData = await response.json();
-    // Store session token for persistence
     if (userData.session_token) {
       updateToken(userData.session_token);
     }
@@ -175,7 +176,7 @@ export const AuthProvider = ({ children }) => {
     login,
     register,
     loginWithGoogle,
-    processOAuthCallback,
+    processGoogleCallback,
     logout,
     checkAuth,
     getAuthHeaders,
