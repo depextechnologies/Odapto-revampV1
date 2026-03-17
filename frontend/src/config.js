@@ -8,7 +8,7 @@
 //   The fallback URL below is used when REACT_APP_BACKEND_URL is not available
 //   Update PRODUCTION_URL before building the APK/IPA
 
-const PRODUCTION_URL = 'https://task-board-app-3.preview.emergentagent.com';
+const PRODUCTION_URL = 'https://odapto.com';
 
 export const API_BASE_URL = process.env.REACT_APP_BACKEND_URL || PRODUCTION_URL;
 export const API = `${API_BASE_URL}/api`;
