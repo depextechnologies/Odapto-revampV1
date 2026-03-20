@@ -108,13 +108,17 @@ export const AuthProvider = ({ children }) => {
     window.location.href = `${API}/auth/google`;
   };
 
-  const handleOAuthToken = async (token) => {
-    updateToken(token);
-    const response = await fetch(`${API}/auth/me`, {
-      headers: { 'Authorization': `Bearer ${token}` }
+  const processGoogleCallback = async (code) => {
+    const redirectUri = window.location.origin + '/auth/google/callback';
+    const response = await fetch(`${API}/auth/google/callback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, redirect_uri: redirectUri })
     });
     const data = await parseResponse(response);
-    if (!response.ok || !data) throw new Error('Failed to verify session');
+    if (!response.ok) throw new Error(data?.detail || 'Google sign-in failed');
+    if (!data) throw new Error('Server error. Please try again.');
+    updateToken(data.session_token);
     setUser(data);
     return data;
   };
@@ -133,7 +137,7 @@ export const AuthProvider = ({ children }) => {
 
   const value = useMemo(() => ({
     user, loading,
-    login, register, loginWithGoogle, handleOAuthToken, logout,
+    login, register, loginWithGoogle, processGoogleCallback, logout,
     checkAuth, getAuthHeaders,
     isAuthenticated: !!user,
     isAdmin: user?.role === 'admin',

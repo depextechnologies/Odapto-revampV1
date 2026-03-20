@@ -24,10 +24,10 @@ import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import TermsPage from './pages/TermsPage';
 import AnimatedSplashScreen from './components/AnimatedSplashScreen';
 
-// Google OAuth callback component — receives token from backend redirect
+// Google OAuth callback component — receives code from Google, sends to backend
 const GoogleAuthCallback = () => {
   const navigate = useNavigate();
-  const { handleOAuthToken } = useAuth();
+  const { processGoogleCallback } = useAuth();
   const hasProcessed = useRef(false);
 
   useEffect(() => {
@@ -35,22 +35,21 @@ const GoogleAuthCallback = () => {
     hasProcessed.current = true;
 
     const params = new URLSearchParams(window.location.search);
-    const token = params.get('token');
-    const error = params.get('error');
+    const code = params.get('code');
 
-    if (token) {
-      handleOAuthToken(token)
+    if (code) {
+      processGoogleCallback(code)
         .then(() => {
           navigate('/dashboard', { replace: true });
         })
-        .catch(() => {
+        .catch((error) => {
+          console.error('Google OAuth error:', error);
           navigate('/login', { replace: true });
         });
     } else {
-      if (error) console.error('Google OAuth error:', error);
       navigate('/login', { replace: true });
     }
-  }, [navigate, handleOAuthToken]);
+  }, [navigate, processGoogleCallback]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
@@ -106,7 +105,7 @@ const AppRouter = () => {
     <Routes>
       <Route path="/" element={<RootRoute />} />
       <Route path="/splash" element={<AnimatedSplashScreen />} />
-      <Route path="/auth/callback" element={<GoogleAuthCallback />} />
+      <Route path="/auth/google/callback" element={<GoogleAuthCallback />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
