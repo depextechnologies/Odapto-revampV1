@@ -30,16 +30,15 @@ load_dotenv(ROOT_DIR / '.env')
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 
-# Database selection:
-# For Atlas/remote: always use the database name embedded in MONGO_URL (most reliable)
-# For local dev: fall back to DB_NAME env var
+# Database selection — single production database, no mixing:
+# 1. Primary: extract database name from MONGO_URL path (e.g. task-sync-hub-16-test_database)
+# 2. Fallback: use DB_NAME env var (local dev only)
 try:
     db = client.get_default_database()
-    logging.info(f"Using database from connection string: {db.name}")
 except Exception:
-    _fallback_db = os.environ.get('DB_NAME', 'odapto')
-    db = client[_fallback_db]
-    logging.info(f"Using database from DB_NAME env var: {_fallback_db}")
+    db = client[os.environ.get('DB_NAME', 'test_database')]
+
+logging.info(f"MongoDB database selected: {db.name}")
 # File storage directory
 UPLOAD_DIR = ROOT_DIR / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
