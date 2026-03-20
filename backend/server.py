@@ -1483,7 +1483,7 @@ async def get_boards(workspace_id: str, user: User = Depends(get_current_user)):
     # Add summary counts and categorization for each board
     for board in boards:
         list_count = await db.lists.count_documents({"board_id": board["board_id"]})
-        cards = await db.cards.find({"board_id": board["board_id"]}, {"attachments": 1}).to_list(1000)
+        cards = await db.cards.find({"board_id": board["board_id"]}, {"_id": 0, "attachments": 1}).to_list(1000)
         card_count = len(cards)
         attachment_count = sum(len(card.get("attachments", [])) for card in cards)
         
