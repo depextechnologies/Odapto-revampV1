@@ -29,7 +29,17 @@ load_dotenv(ROOT_DIR / '.env')
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+
+# Database selection: use DB_NAME env var.
+# For Atlas connections, if DB_NAME is the local-dev default, try the URI's default database first.
+_db_name = os.environ.get('DB_NAME', 'odapto')
+if _db_name == 'test_database' and ('mongodb+srv' in mongo_url or 'mongodb.net' in mongo_url):
+    try:
+        db = client.get_default_database()
+    except Exception:
+        db = client['odapto']
+else:
+    db = client[_db_name]
 
 # File storage directory
 UPLOAD_DIR = ROOT_DIR / "uploads"
@@ -335,7 +345,12 @@ def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 def verify_password(password: str, hashed: str) -> bool:
-    return bcrypt.checkpw(password.encode(), hashed.encode())
+    if not hashed or len(hashed) < 20:
+        return False
+    try:
+        return bcrypt.checkpw(password.encode(), hashed.encode())
+    except (ValueError, TypeError):
+        return False
 
 async def get_current_user(request: Request) -> User:
     # Get session token from Authorization header
