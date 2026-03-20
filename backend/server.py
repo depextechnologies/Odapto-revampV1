@@ -30,19 +30,13 @@ load_dotenv(ROOT_DIR / '.env')
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 
-# Database selection: use DB_NAME env var.
-# For Atlas connections, if DB_NAME is the local-dev default, try the URI's default database first.
-_db_name = os.environ.get('DB_NAME')
-if not _db_name:
-    raise Exception("DB_NAME environment variable is not set")
-
-if _db_name == 'test_database' and ('mongodb+srv' in mongo_url or 'mongodb.net' in mongo_url):
-    try:
-        db = client.get_default_database()
-    except Exception:
-        db = client[_db_name]
-else:
-    db = client[_db_name]
+# Database selection:
+# For Atlas/remote: always use the database name embedded in MONGO_URL (most reliable)
+# For local dev: fall back to DB_NAME env var
+try:
+    db = client.get_default_database()
+except Exception:
+    db = client[os.environ.get('DB_NAME', 'odapto')]
 # File storage directory
 UPLOAD_DIR = ROOT_DIR / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
