@@ -35,8 +35,11 @@ client = AsyncIOMotorClient(mongo_url)
 # For local dev: fall back to DB_NAME env var
 try:
     db = client.get_default_database()
+    logging.info(f"Using database from connection string: {db.name}")
 except Exception:
-    db = client[os.environ.get('DB_NAME', 'odapto')]
+    _fallback_db = os.environ.get('DB_NAME', 'odapto')
+    db = client[_fallback_db]
+    logging.info(f"Using database from DB_NAME env var: {_fallback_db}")
 # File storage directory
 UPLOAD_DIR = ROOT_DIR / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
