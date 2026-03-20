@@ -4,197 +4,153 @@ The user wants to build Odapto, a production-grade Kanban-based work management 
 **PRODUCT REQUIREMENTS:**
 -   **Tech Stack:** React (Web-first) + FastAPI + MongoDB, with Capacitor for mobile.
 -   **Branding:** Use Odapto logos, support light/dark modes, clean UX.
--   **Authentication:** Email/Password and Emergent-managed Google OAuth.
+-   **Authentication:** The user initially used Emergent-managed Google OAuth but has since requested it be replaced with a fully white-labeled direct Google OAuth 2.0 implementation.
 -   **Core Features:** Workspaces, Teams, real-time Kanban Boards (drag-and-drop), and a token-based email invitation system.
 -   **Card Functionality:** Rich cards with descriptions, labels, attachments, priority, members, checklists, comments, and activity logs.
--   **Mobile App:** The existing React web app to be packaged for Android (tablet) and iOS (iPad).
--   **Recent PDF Requirements ():**
-    -   **Bug Fixes:**
-        -   Ensure board background images are displayed on the workspace grid.
-        -   Standardize the profile dropdown menu across all pages.
-        -   Update application logos for light/dark mode and different screen sizes.
-    -   **New Features:**
-        -   Create new static pages: Integrations, Help, Upgrade Plan, Privacy Policy, Terms of Service.
-        -   Update landing page footer with links to new static pages.
-        -   Allow selecting a template when creating a new board.
-        -   Implement UI for card attachments (view, download, delete, set as cover).
-        -   Implement checklists on cards.
-        -   Allow setting a card cover image.
-        -   Implement card duplication.
-        -   Add a global search bar.
+-   **Mobile App:** The existing React web app to be packaged for Android (tablet/mobile) and iOS (iPad/mobile) with a branded animated splash screen.
+-   **Notifications:** All board members must receive real-time notifications for all card activities (comments, attachments, etc.), and existing users should receive an email when invited to a new board.
+-   **Deployment:** The application must be deployable to the user's custom domain () and run independently of the agent's active state.
 
 **User's preferred language**: English
 
 **what currently exists?**
-A full-stack Kanban-style application (Odapto) with a React frontend, FastAPI backend, and MongoDB database. It includes user authentication (JWT & Google OAuth), workspaces, boards with drag-and-drop cards, teams, real-time sync via WebSockets, and a full email invitation system.
+A full-stack Kanban-style application (Odapto) with a React frontend, FastAPI backend, and MongoDB database. It includes user authentication via JWT (email/password) and a direct, white-labeled Google OAuth 2.0 flow. The frontend is wrapped with Capacitor for mobile builds and features a custom animated splash screen and responsive login UI for tablets and phones.
 
-The project has also been configured with Capacitor to generate native Android and iOS builds from the React codebase.
+The application has a full suite of features including workspaces, boards with drag-and-drop cards, a template system, real-time sync via WebSockets, and an email invitation system. A robust notification system alerts all board members of card activities.
 
-Most recently, the agent implemented a major UI/UX overhaul based on a user-provided PDF, which included new logos, a standardized profile dropdown, several new static pages (Integrations, Help, Upgrade, etc.), and fixes for displaying board backgrounds. The Create Board flow was updated to allow template selection, and a UI for card attachment previews was added.
+Key bugs, including a critical CORS issue, a Board Not Found error for invited users, and frontend body stream already read errors, have been resolved. The codebase has been hardened to use the production domain () dynamically, making it independent of the preview environment.
 
 **Last working item**:
--   Last item agent was working: Implementing features from the user's  file. The agent finished the UI for Template Selection in Board Creation and the UI for Attachment Preview in the card detail modal.
+-   Last item agent was working: Fixing a critical production deployment failure. The user provided logs showing .
 -   Status: IN PROGRESS
--   Agent Testing Done: Y (via screenshots)
--   Which testing method agent to use? Frontend testing agent
+-   Agent Testing Done: N
+-   Which testing method agent to use? backend testing agent
 -   User Testing Done: N
 
 **All Pending/In progress Issue list**:
--   Issue 1: CORS error on localhost for login API (P0 - BLOCKER)
+-   Issue 1: Production Deployment Failure (P0 - BLOCKER)
 
 **Issues Detail:**
--   **Issue 1: CORS error on localhost for login API**
-    -   **Description:** The user is unable to test the application locally (on ) because of a persistent CORS error when calling the login API. The templates API works, but the auth API fails. This blocks the user from building and testing the native mobile app.
-    -   **Attempted fixes:**
-        1.  **Adding origins to :** The agent added , , and  to the  list in . This did not work.
-        2.  **Explicit origins with :** The agent tried to fix the middleware to handle explicit origins when . This also failed, seemingly because of a proxy/Cloudflare layer overwriting the  header to .
-        3.  **Removing :** The agent removed the  option from all  calls in the frontend, assuming it was unnecessary for token-based auth. The user reported the issue persists.
+-   **Issue 1: Production Deployment Failure**
+    -   **Description:** The application fails to deploy to the user's production environment. The build logs show a . This happens because the deployment environment (which uses MongoDB Atlas) is trying to connect to a database named , a value taken from the  file intended for local development. The production MongoDB Atlas user is not authorized to access a database with this name.
+    -   **Attempted fixes:** The agent correctly identified that the code uses the  environment variable, but the value being supplied during the production build process is incorrect. The  confirmed this is a blocker related to environment configuration.
     -   **Next debug checklist:**
-        -   Verify : Examine the  configuration again. It's possible the order of middleware is causing issues.
-        -   Re-evaluate : While removed, it's worth understanding exactly why it was there. If cookies are used for anything (even if not for auth sessions), this might be needed.
-        -   Inspect network traffic: Ask the user to provide the full  output or network tab details (Request and Response headers) for the failing  and  requests to  from their local machine. The key is to see what  the browser is actually receiving.
-        -   The issue is specific to the  endpoint. Compare its implementation in  to a working endpoint like . There may be a difference in how they are defined or what dependencies they have that affects CORS.
-    -   **Why fix this issue and what will be achieved with the fix?** This is a critical blocker. The user cannot build, test, or use the mobile APK on their local device until they can successfully log in. Fixing it will unblock all local and mobile development.
+        -   The root cause is known. The application code is correct in using .
+        -   The problem is purely in the deployment configuration. The agent needs to instruct the user on how to set the  secret/environment variable within the Emergent deployment settings.
+        -   This value must match the database name that the user has created and authorized in their MongoDB Atlas account.
+    -   **Why fix this issue and what will be achieved with the fix?** This is the final blocker preventing the application from running on the production domain (). Fixing it will allow a successful deployment.
     -   **Status:** IN PROGRESS
-    -   **Is recurring issue?** Y
-    -   **Should Test frontend/backend/both after fix?** both
+    -   **Is recurring issue?** N
+    -   **Should Test frontend/backend/both after fix?** backend
     -   **Blocked on other issue:** None. This is the primary blocker.
 
 **In progress Task List**:
--   **Task 1: Complete Attachment Feature (UI only)**
-    -   **Where to resume:** The UI for displaying attachments in  has been implemented.
-    -   **What will be achieved with this?** Fulfills the user's requirement for a visual representation of card attachments.
-    -   **Status:** IN PROGRESS (UI is done, functionality is pending)
-    -   **Should Test frontend/backend/both after fix?** frontend
-    -   **Blocked on something:** None
-
--   **Task 2: Template Selection in Board Creation**
-    -   **Where to resume:** The logic and UI have been added to .
-    -   **What will be achieved with this?** Users can now choose a template when creating a new board, streamlining setup.
-    -   **Status:** IN PROGRESS (Needs user verification)
-    -   **Should Test frontend/backend/both after fix?** frontend
-    -   **Blocked on something:** Blocked by the CORS issue, as the user cannot fully test the new flow.
+- None.
 
 **Upcoming and Future Tasks**
 **Upcoming Tasks:**
--   **🟣 P0 - Mobile App Build Process:** The user is building the APK locally. The process is fragile and has been a source of multiple issues (env vars, CORS). The  should be reviewed and potentially enhanced with more robust troubleshooting steps.
--   **🟡 P1 - Attachment Functionality (Backend):** Implement the backend logic for uploading, deleting, and setting card attachments as cover images.
--   **🟡 P1 - Checklists on Cards:** Add functionality to create, edit, and check off items in a checklist within a card.
--   **🟡 P1 - Card Duplication:** Implement the Duplicate Card feature.
--   **🟡 P1 - Global Search:** Add a global search bar to the application header.
+-   **🟣 P0 - Final Mobile Build Guidance:** Once the deployment is stable on , provide the user with the final, validated instructions from  to create the Android APK and iOS IPA.
+-   **🟡 P1 - Production Sanity Check:** After a successful deployment, perform a final end-to-end test on  to confirm all functionalities (login, Google OAuth, board operations, notifications) are working as expected.
 
 **Future Tasks:**
--   **⚪️ P2 - Board Backgrounds:** Allow users to choose from pre-selected images or upload their own.
--   **⚪️ P2 - Refactor :** Split the monolithic  into smaller, more manageable FastAPI routers (e.g., , ).
--   **⚪️ P2 - Advanced Filtering & Analytics:** Implement advanced board filters and analytics dashboards.
--   **⚪️ P2 - Subscription/Monetization Readiness:** Architect feature flags for paid plans.
+-   **⚪️ P2 - Board Customization:** Allow users to choose from pre-selected images or upload their own board backgrounds.
+-   **⚪️ P2 - Advanced Filtering:** Implement board filters (by label, due date, member).
+-   **⚪️ P2 - Refactor :** Split the monolithic  into smaller, more manageable FastAPI routers.
+-   **⚪️ P2 - Monetization & Usability:** Implement board export (JSON/CSV), keyboard shortcuts, and subscription tiers.
 
 **Completed work in this session**
--   **Capacitor Mobile App Setup:** Initialized Capacitor for the project, configured Android and iOS platforms, and provided build instructions. (DONE)
--   **Backend URL Centralization:** Fixed a mobile build issue by centralizing the backend URL in  to prevent it from being . (DONE)
--   **Password Management:** Implemented Change Password for logged-in users and a Forgot Password email-based reset flow. (DONE)
--   **Profile Photo Upload:** Added functionality for users to upload and crop a profile picture. (DONE)
--   **Admin Role Assignment:** Assigned the 'admin' role to the user's account (). (DONE)
--   **Template System:** Implemented a full template system, including admin category management, publishing boards as templates, and a template gallery with previews. (DONE)
--   **UI Overhaul (from PDF):**
-    -   Updated the app with new logos for light/dark modes. (DONE)
-    -   Standardized the user profile dropdown menu across pages. (DONE)
-    -   Fixed a bug to ensure board background images display correctly. (DONE)
-    -   Created new static pages: Integrations, Help, Upgrade, Privacy Policy, Terms of Service. (DONE)
-    -   Updated landing page footer with links. (DONE)
--   **Made with Emergent Badge Removal:** Removed the badge from the application's . (DONE)
+-   **Resolved CORS Blocker:** Fixed a persistent CORS issue by removing all cookie-based logic and standardizing on .
+-   **White-Labeled Google OAuth:** Successfully migrated from Emergent-hosted authentication to a direct Google OAuth 2.0 implementation within the FastAPI backend, removing all external auth dependencies.
+-   **Enhanced Notification System:** Implemented real-time notifications for all board members for card activities and ensured existing users receive email invitations.
+-   **Fixed Invited User Access Bug:** Corrected a critical flaw where users invited directly to a board were not added to the workspace, preventing them from accessing the board.
+-   **Mobile App Experience:** Implemented an animated video splash screen, responsive login UI for mobile/tablet, and generated all necessary icons and assets. Created  for user guidance.
+-   **Frontend Stability:** Eliminated body stream already read errors and fixed a redirect race condition after login/registration by rewriting  and .
+-   **Deployment Hardening:** Made the frontend configuration robust by adding logic to  to dynamically use  when in production, making the deployed application independent of the agent's preview environment.
 
 **Earlier issues found/mentioned but not fixed**
-The recurring CORS issue described in All Pending/In progress Issue list is the primary unfixed issue.
+- None.
 
 **Known issue recurrence from previous fork**
 -   **Issue recurrence in previous fork:** CORS errors.
 -   **Recurrence count:** 3+
--   **Status:** IN PROGRESS
+-   **Status:** RESOLVED
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
--   **Frontend:** React, Tailwind CSS, Shadcn UI, , .
--   **Backend:** FastAPI (Python).
--   **Database:** MongoDB.
--   **Mobile:** **Capacitor** to wrap the React app for Android/iOS.
--   **Authentication:** JWT, Emergent-managed Google OAuth.
--   **Real-time:** FastAPI WebSockets.
+-   **Frontend:** React, Tailwind CSS, Shadcn UI
+-   **Backend:** FastAPI (Python)
+-   **Database:** MongoDB (interfacing with Atlas in production)
+-   **Mobile:** Capacitor
+-   **Authentication:** JWT (email/password), Direct Google OAuth 2.0
+-   **Real-time:** FastAPI WebSockets
 
 **key DB schema**
-No changes in this session.
--   **users:** 
--   **boards:** 
--   **templates:** 
+-   No schema changes were made. Key collections are , , , , and .
 
 **changes in tech stack**
--   **Capacitor:** Added to enable native mobile builds from the existing web codebase.
+-   Authentication was migrated from Emergent-hosted Google Auth to a direct Google OAuth 2.0 implementation using  in the backend.
 
 **All files of reference**
--   : Repeatedly modified to fix CORS issues. Contains the core logic.
--   : New file created to centralize the  and solve an environment variable issue in mobile builds.
--   : Heavily modified to fix background images, add the new logo, standardize the dropdown, and add the template selection dialog.
--   : Modified to use the new logo and standardized dropdown.
--   : Modified to use the new logo and standardized dropdown.
--   : Updated to include the new UI for attachment previews.
--   : Modified to remove the Made with Emergent badge.
--   : New file with instructions for building the mobile app.
+-   : Heavily modified to fix CORS, add new card feature endpoints, fix the invited user bug, implement direct Google OAuth, and enhance the notification system.
+-   : Completely rewritten for stability, to fix body stream already read errors, and to implement the direct Google OAuth flow.
+-   : Critically updated to ensure the deployed application on  is independent of the preview environment's URLs.
+-   : The  in this file is the cause of the deployment issue and needs to be overridden by a secret in the production environment.
+-   : Contains the final instructions for the user to build the mobile apps.
 
 **Areas that need refactoring**:
--   The  file is a large monolith. It should be broken down into separate FastAPI routers for better organization and maintainability.
--   The CORS implementation is brittle and needs a robust, permanent solution that works reliably with the platform's proxy layer and the user's local development environment.
+-    is a large monolith that should be broken down into separate routers for better maintainability (a recognized future task).
 
 **key api endpoints**
--   : **(CURRENTLY FAILS ON LOCALHOST DUE TO CORS)**
--   :  to change the password for an authenticated user.
--   :  to send a password reset email.
--   :  to set a new password using a token from email.
--   :  to upload a user's profile picture.
--   :  to serve uploaded profile pictures.
+-   **NEW:**  (Initiates Google OAuth flow)
+-   **NEW:**  (Handles the OAuth callback)
+-   **REMOVED:** The previous Emergent-based OAuth session endpoint.
+-   **MODIFIED:** ,  (Now correctly adds users to the parent workspace).
+-   **MODIFIED:**  (Checks both workspace and direct board membership).
 
 **Critical Info for New Agent**
--   **The user is blocked by a recurring CORS issue** when running the frontend on . The error specifically affects the login API. Previous attempts to fix this by modifying  in  and removing  from frontend  calls have failed. This is the highest priority issue to resolve.
--   The user is building the mobile app (APK) on their own machine. Any changes you make require clear instructions for the user to pull the code and rebuild (yarn run v1.22.22
-info Visit https://yarnpkg.com/en/docs/cli/run for documentation about this command., , etc.).
--   The project now uses a centralized configuration for the backend URL in . All API calls and WebSocket connections must use the constants exported from this file to ensure they work in both web and mobile contexts.
+-   **Your immediate and only priority is to resolve the production deployment failure.** The error is .
+-   **Root Cause:** The production deployment is using the database name  from the repository's  file, which is incorrect for the MongoDB Atlas environment.
+-   **Solution:** The application code is correct. You must guide the user to configure their deployment environment. They need to add a secret/environment variable named  in their Emergent deployment settings. The value of this variable must be the name of the database they have created and authorized in their MongoDB Atlas account. Once this is set, they must re-deploy the application.
 
 **documents and test reports created in this job**
--    (updated)
--    (created)
+-   
+-   
+-   
+-   
+-   
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **User:** yes please go ahead with the remaining features . - **Status: IN PROGRESS**. Agent started working on Template Selection and Attachment UI.
-2.  **User:** Though we have deployed the app to your server...how your process work after the app is live? - **Status: RESOLVED**. Agent explained the development process on the preview environment.
-3.  **User:** Provides new PDF with requirements (). - **Status: IN PROGRESS**. Agent is working through these requirements.
-4.  **User:** Please remove Made with Emergent badge... - **Status: RESOLVED**. Agent removed the badge.
-5.  **User:** I am hitting server api from our local host: http://localhost:3000/ but still we are getting CORS Error. - **Status: IN PROGRESS (BLOCKED)**. This is the current main blocker.
-6.  **User:** we are still getting CORS error in login api. Template api is working fine now. - **Status: IN PROGRESS (BLOCKED)**. Agent's last fix didn't work.
-7.  **User:** Reports  is undefined in the mobile app, causing a 404. - **Status: RESOLVED**. Agent created  to fix this.
-8.  **User:** Reports  on their local machine. - **Status: RESOLVED**. Agent provided correct installation instructions for Node.js and Yarn on a Mac.
-9.  **User:** Asks for the  file. - **Status: RESOLVED (BLOCKED)**. Agent determined the build environment doesn't support APK creation and guided the user to build it locally.
-10. **User:** Asks about tech stack for mobile app (Flutter vs other). - **Status: RESOLVED**. Agent recommended and proceeded with Capacitor.
+1.  **User:** Reports body stream already read and login redirect issues on . (Resolved)
+2.  **User:** Acknowledges website is working, requests guidance on building mobile apps. (Acknowledged)
+3.  **User:** Asks how to create Android/iPhone builds. (User request)
+4.  **User:** Reports that  stops working when the agent is inactive. (Resolved by hardening )
+5.  **User:** Reports successful login but is redirected back to the login page, with a body consumed error. (Resolved)
+6.  **User:** Confirms auth works, but redirect to  fails. (Resolved)
+7.  **User:** Reports deployment failure with MongoDB authorization error logs. (Current Blocker)
+8.  **User:** Confirms deployment is to  and not the preview environment.
+9.  **User:** Reports body stream already read error during login and  for Google OAuth on the live site. (Partially resolved - frontend fix done, user needs to configure Google Console)
+10. **User:** Asks why preview URL is being used and wants a fully white-labeled  experience. (Resolved by removing all hardcoded preview URLs).
 
 **Project Health Check:**
--   **Broken:** The local development and mobile build workflow is broken due to the persistent CORS issue on the login API.
--   **Mocked:** The Integrations page and Attachment functionality are UI-only mocks.
+-   **Broken:** The production deployment is blocked by a database authorization error ().
+-   **Mocked:** None.
 
 **3rd Party Integrations**
--   **Emergent-managed Google Auth:** For Google social login.
--   **Gmail SMTP:** For sending transactional emails (invitations, password resets).
+-   **Direct Google OAuth 2.0:** Uses user-provided  and  for a fully white-labeled experience.
+-   **Gmail SMTP:** For sending transactional emails.
 -   **Capacitor:** For building native mobile apps from the web codebase.
 
 **Testing status**
--   **Testing agent used after significant changes:** NO (Agent has been using manual screenshots for recent changes).
+-   **Testing agent used after significant changes:** YES. All major features (CORS fix, Card Features, OAuth, Notifications) were tested with the agent and reported 100% pass rates.
 -   **Troubleshoot agent used after agent stuck in loop:** NO
--   **Test files created:** None
--   **Known regressions:** The login functionality is regressed on localhost due to CORS.
+-   **Test files created:** None.
+-   **Known regressions:** None in the code. The only failure is in the production deployment pipeline due to misconfiguration.
 
 **Credentials to test flow:**
 -   **Admin Email:** 
 -   **Admin Password:** 
--   **User's Admin Email:**  (Uses Google OAuth)
 
 **What agent forgot to execute**
--   The agent has been diligent but has failed to solve the root cause of the CORS issue, which is the most critical pending item. It has not been forgotten but remains unresolved despite multiple attempts.</analysis>
+- The agent correctly identified the  deployment issue but did not bring it to a final resolution. The conversation was sidetracked by other frontend bugs that appeared on the live site. While those bugs were fixed, the core deployment blocker remains. The next agent must focus solely on guiding the user to fix the  environment variable in their deployment settings.</analysis>
