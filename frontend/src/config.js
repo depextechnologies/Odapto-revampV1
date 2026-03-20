@@ -1,16 +1,19 @@
 // Central configuration for API URLs
-// This ensures the app works in development, production, and mobile builds
-//
-// For production deployment to odapto.com:
-//   Set REACT_APP_BACKEND_URL=https://odapto.com in frontend/.env
-//
-// For mobile builds (Capacitor):
-//   The fallback URL below is used when REACT_APP_BACKEND_URL is not available
-//   Update PRODUCTION_URL before building the APK/IPA
+// Ensures the app works in development (preview), production (odapto.com), and mobile (Capacitor)
 
-const PRODUCTION_URL = 'https://odapto.com';
+const PRODUCTION_DOMAIN = 'odapto.com';
+const PRODUCTION_URL = `https://${PRODUCTION_DOMAIN}`;
 
-export const API_BASE_URL = process.env.REACT_APP_BACKEND_URL || PRODUCTION_URL;
+// Detect if running on production domain
+const isProduction = typeof window !== 'undefined' && window.location.hostname === PRODUCTION_DOMAIN;
+
+// On production (odapto.com): always use odapto.com backend
+// On preview/dev: use the env var (preview URL)
+// On mobile (Capacitor): env var is undefined, falls back to production URL
+export const API_BASE_URL = isProduction
+  ? PRODUCTION_URL
+  : (process.env.REACT_APP_BACKEND_URL || PRODUCTION_URL);
+
 export const API = `${API_BASE_URL}/api`;
 
 // WebSocket URL (converts https to wss)
