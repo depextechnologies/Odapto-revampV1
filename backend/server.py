@@ -573,7 +573,7 @@ async def google_login(request: Request):
     
     # Build redirect URI from the request origin
     frontend_url = os.environ.get("FRONTEND_URL", str(request.base_url).rstrip("/"))
-    redirect_uri = f"{frontend_url}/auth/google/callback"
+    redirect_uri = f"{frontend_url}/api/auth/google/callback"
     
     # Build Google OAuth URL
     params = {
@@ -588,103 +588,102 @@ async def google_login(request: Request):
     google_url = f"{GOOGLE_AUTH_URL}?{urlencode(params)}"
     return RedirectResponse(url=google_url)
 
-@api_router.post("/auth/google/callback")
+@api_router.get("/auth/google/callback")
 async def google_callback(request: Request):
-    """Exchange Google auth code for user info and create session"""
-    body = await request.json()
-    code = body.get("code")
-    redirect_uri = body.get("redirect_uri")
-    
+    """Handle Google OAuth callback — exchanged code for session, redirects to frontend"""
+    code = request.query_params.get("code")
+    frontend_url = os.environ.get("FRONTEND_URL", "https://odapto.com")
+
     if not code:
-        raise HTTPException(status_code=400, detail="Authorization code required")
-    
+        return RedirectResponse(url=f"{frontend_url}/login?error=no_code")
+
     client_id = os.environ.get("GOOGLE_CLIENT_ID")
     client_secret = os.environ.get("GOOGLE_CLIENT_SECRET")
-    
+
     if not client_id or not client_secret:
-        raise HTTPException(status_code=500, detail="Google OAuth not configured")
-    
-    # Exchange authorization code for tokens
-    async with httpx.AsyncClient() as http_client:
-        token_resp = await http_client.post(GOOGLE_TOKEN_URL, data={
-            "code": code,
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "redirect_uri": redirect_uri,
-            "grant_type": "authorization_code"
-        })
-        
-        if token_resp.status_code != 200:
-            raise HTTPException(status_code=401, detail="Failed to exchange authorization code")
-        
-        tokens = token_resp.json()
-        access_token = tokens.get("access_token")
-        
-        if not access_token:
-            raise HTTPException(status_code=401, detail="No access token received")
-        
-        # Get user info from Google
-        user_resp = await http_client.get(GOOGLE_USERINFO_URL, headers={
-            "Authorization": f"Bearer {access_token}"
-        })
-        
-        if user_resp.status_code != 200:
-            raise HTTPException(status_code=401, detail="Failed to get user info")
-        
-        google_user = user_resp.json()
-    
-    email = google_user.get("email")
-    name = google_user.get("name", email.split("@")[0])
-    picture = google_user.get("picture")
-    
-    if not email:
-        raise HTTPException(status_code=401, detail="No email in Google response")
-    
-    # Check if user exists
-    existing_user = await db.users.find_one({"email": email}, {"_id": 0})
-    
-    if existing_user:
-        user_id = existing_user["user_id"]
-        # Update name and picture if changed
-        await db.users.update_one(
-            {"user_id": user_id},
-            {"$set": {"name": name, "picture": picture}}
-        )
-        role = existing_user.get("role", UserRole.NORMAL)
-    else:
-        # Create new user
-        user_id = f"user_{uuid.uuid4().hex[:12]}"
-        user_count = await db.users.count_documents({})
-        role = UserRole.ADMIN if user_count == 0 else UserRole.NORMAL
-        
-        user_doc = {
+        return RedirectResponse(url=f"{frontend_url}/login?error=oauth_not_configured")
+
+    # The redirect_uri must match exactly what was sent in the initial auth request
+    redirect_uri = f"{frontend_url}/api/auth/google/callback"
+
+    try:
+        # Exchange authorization code for tokens
+        async with httpx.AsyncClient() as http_client:
+            token_resp = await http_client.post(GOOGLE_TOKEN_URL, data={
+                "code": code,
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "redirect_uri": redirect_uri,
+                "grant_type": "authorization_code"
+            })
+
+            if token_resp.status_code != 200:
+                logger.error(f"Google token exchange failed: {token_resp.text}")
+                return RedirectResponse(url=f"{frontend_url}/login?error=token_exchange_failed")
+
+            tokens = token_resp.json()
+            access_token = tokens.get("access_token")
+
+            if not access_token:
+                return RedirectResponse(url=f"{frontend_url}/login?error=no_access_token")
+
+            # Get user info from Google
+            user_resp = await http_client.get(GOOGLE_USERINFO_URL, headers={
+                "Authorization": f"Bearer {access_token}"
+            })
+
+            if user_resp.status_code != 200:
+                return RedirectResponse(url=f"{frontend_url}/login?error=userinfo_failed")
+
+            google_user = user_resp.json()
+
+        email = google_user.get("email")
+        name = google_user.get("name", email.split("@")[0] if email else "User")
+        picture = google_user.get("picture")
+
+        if not email:
+            return RedirectResponse(url=f"{frontend_url}/login?error=no_email")
+
+        # Check if user exists
+        existing_user = await db.users.find_one({"email": email}, {"_id": 0})
+
+        if existing_user:
+            user_id = existing_user["user_id"]
+            await db.users.update_one(
+                {"user_id": user_id},
+                {"$set": {"name": name, "picture": picture}}
+            )
+        else:
+            user_id = f"user_{uuid.uuid4().hex[:12]}"
+            user_count = await db.users.count_documents({})
+            role = UserRole.ADMIN if user_count == 0 else UserRole.NORMAL
+
+            user_doc = {
+                "user_id": user_id,
+                "email": email,
+                "name": name,
+                "picture": picture,
+                "role": role,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }
+            await db.users.insert_one(user_doc)
+
+        # Create session
+        session_token = f"sess_{uuid.uuid4().hex}"
+        session_doc = {
             "user_id": user_id,
-            "email": email,
-            "name": name,
-            "picture": picture,
-            "role": role,
+            "session_token": session_token,
+            "expires_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
             "created_at": datetime.now(timezone.utc).isoformat()
         }
-        await db.users.insert_one(user_doc)
-    
-    # Create session
-    session_token = f"sess_{uuid.uuid4().hex}"
-    session_doc = {
-        "user_id": user_id,
-        "session_token": session_token,
-        "expires_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
-        "created_at": datetime.now(timezone.utc).isoformat()
-    }
-    await db.user_sessions.insert_one(session_doc)
-    
-    return {
-        "user_id": user_id,
-        "email": email,
-        "name": name,
-        "role": role,
-        "picture": picture,
-        "session_token": session_token
-    }
+        await db.user_sessions.insert_one(session_doc)
+
+        # Redirect to frontend dashboard with token
+        return RedirectResponse(url=f"{frontend_url}/auth/callback?token={session_token}")
+
+    except Exception as e:
+        logger.error(f"Google OAuth callback error: {e}")
+        return RedirectResponse(url=f"{frontend_url}/login?error=server_error")
 
 @api_router.get("/auth/me")
 async def get_me(user: User = Depends(get_current_user)):
