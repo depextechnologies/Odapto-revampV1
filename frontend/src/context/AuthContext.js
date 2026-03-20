@@ -3,28 +3,24 @@ import { API } from '../config';
 
 const AuthContext = createContext(null);
 
-// Helper to get stored token from localStorage
-const getStoredToken = () => localStorage.getItem('odapto_session_token');
+const TOKEN_KEY = 'odapto_session_token';
+const getStoredToken = () => localStorage.getItem(TOKEN_KEY);
 const setStoredToken = (token) => {
-  if (token) {
-    localStorage.setItem('odapto_session_token', token);
-  }
+  if (token) localStorage.setItem(TOKEN_KEY, token);
+  else localStorage.removeItem(TOKEN_KEY);
 };
-const clearStoredToken = () => localStorage.removeItem('odapto_session_token');
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 };
 
-// Safe JSON parse from a fetch response — reads body exactly once
-const safeJson = async (response) => {
-  const text = await response.text();
+// Read response body safely — handles "body already consumed" edge cases
+const parseResponse = async (response) => {
   try {
-    return JSON.parse(text);
+    const cloned = response.clone();
+    return await cloned.json();
   } catch {
     return null;
   }
@@ -35,39 +31,29 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [sessionToken, setSessionToken] = useState(() => getStoredToken());
 
-  // Update token state and storage together
   const updateToken = useCallback((token) => {
     setSessionToken(token);
-    if (token) {
-      setStoredToken(token);
-    } else {
-      clearStoredToken();
-    }
+    setStoredToken(token);
   }, []);
 
   const getAuthHeaders = useCallback(() => {
     const token = sessionToken || getStoredToken();
-    if (token) {
-      return { 'Authorization': `Bearer ${token}` };
-    }
-    return {};
+    return token ? { 'Authorization': `Bearer ${token}` } : {};
   }, [sessionToken]);
 
   const checkAuth = useCallback(async () => {
     const token = sessionToken || getStoredToken();
-    
     if (!token) {
       setUser(null);
       setLoading(false);
       return;
     }
-
     try {
       const response = await fetch(`${API}/auth/me`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
-        const data = await safeJson(response);
+        const data = await parseResponse(response);
         if (data) {
           setUser(data);
         } else {
@@ -78,8 +64,7 @@ export const AuthProvider = ({ children }) => {
         setUser(null);
         updateToken(null);
       }
-    } catch (error) {
-      console.error('Auth check failed:', error);
+    } catch {
       setUser(null);
       updateToken(null);
     } finally {
@@ -97,20 +82,10 @@ export const AuthProvider = ({ children }) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password })
     });
-    
-    const data = await safeJson(response);
-    
-    if (!response.ok) {
-      throw new Error(data?.detail || 'Login failed');
-    }
-    
-    if (!data) {
-      throw new Error('Server error. Please try again.');
-    }
-    
-    if (data.session_token) {
-      updateToken(data.session_token);
-    }
+    const data = await parseResponse(response);
+    if (!response.ok) throw new Error(data?.detail || 'Login failed');
+    if (!data) throw new Error('Server error. Please try again.');
+    updateToken(data.session_token);
     setUser(data);
     return data;
   };
@@ -121,20 +96,10 @@ export const AuthProvider = ({ children }) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, email, password })
     });
-    
-    const data = await safeJson(response);
-    
-    if (!response.ok) {
-      throw new Error(data?.detail || 'Registration failed');
-    }
-    
-    if (!data) {
-      throw new Error('Server error. Please try again.');
-    }
-    
-    if (data.session_token) {
-      updateToken(data.session_token);
-    }
+    const data = await parseResponse(response);
+    if (!response.ok) throw new Error(data?.detail || 'Registration failed');
+    if (!data) throw new Error('Server error. Please try again.');
+    updateToken(data.session_token);
     setUser(data);
     return data;
   };
@@ -150,20 +115,10 @@ export const AuthProvider = ({ children }) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code, redirect_uri: redirectUri })
     });
-    
-    const data = await safeJson(response);
-    
-    if (!response.ok) {
-      throw new Error(data?.detail || 'Google sign-in failed');
-    }
-    
-    if (!data) {
-      throw new Error('Server error. Please try again.');
-    }
-    
-    if (data.session_token) {
-      updateToken(data.session_token);
-    }
+    const data = await parseResponse(response);
+    if (!response.ok) throw new Error(data?.detail || 'Google sign-in failed');
+    if (!data) throw new Error('Server error. Please try again.');
+    updateToken(data.session_token);
     setUser(data);
     return data;
   };
@@ -175,23 +130,15 @@ export const AuthProvider = ({ children }) => {
         method: 'POST',
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
       });
-    } catch (error) {
-      console.error('Logout error:', error);
-    }
+    } catch {}
     setUser(null);
     updateToken(null);
   };
 
   const value = useMemo(() => ({
-    user,
-    loading,
-    login,
-    register,
-    loginWithGoogle,
-    processGoogleCallback,
-    logout,
-    checkAuth,
-    getAuthHeaders,
+    user, loading,
+    login, register, loginWithGoogle, processGoogleCallback, logout,
+    checkAuth, getAuthHeaders,
     isAuthenticated: !!user,
     isAdmin: user?.role === 'admin',
     isPrivileged: user?.role === 'admin' || user?.role === 'privileged'

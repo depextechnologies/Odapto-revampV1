@@ -75,7 +75,9 @@ const ProtectedRoute = ({ children, requireAdmin = false, requirePrivileged = fa
     );
   }
 
-  if (!user) {
+  // Check both React state AND localStorage token (handles race condition after login/register)
+  const hasToken = !!localStorage.getItem('odapto_session_token');
+  if (!user && !hasToken) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
