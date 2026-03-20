@@ -20,6 +20,16 @@ export const useAuth = () => {
   return context;
 };
 
+// Safe JSON parse from a fetch response — reads body exactly once
+const safeJson = async (response) => {
+  const text = await response.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+};
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -44,17 +54,8 @@ export const AuthProvider = ({ children }) => {
   }, [sessionToken]);
 
   const checkAuth = useCallback(async () => {
-    // CRITICAL: If returning from OAuth callback, skip the /me check.
-    // AuthCallback will exchange the session_id and establish the session first.
-    if (window.location.hash?.includes('session_id=')) {
-      setLoading(false);
-      return;
-    }
-
-    // Get token from state or localStorage
     const token = sessionToken || getStoredToken();
     
-    // If no token, user is not authenticated
     if (!token) {
       setUser(null);
       setLoading(false);
@@ -63,13 +64,16 @@ export const AuthProvider = ({ children }) => {
 
     try {
       const response = await fetch(`${API}/auth/me`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
-        const userData = await response.json();
-        setUser(userData);
+        const data = await safeJson(response);
+        if (data) {
+          setUser(data);
+        } else {
+          setUser(null);
+          updateToken(null);
+        }
       } else {
         setUser(null);
         updateToken(null);
@@ -94,18 +98,21 @@ export const AuthProvider = ({ children }) => {
       body: JSON.stringify({ email, password })
     });
     
+    const data = await safeJson(response);
+    
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Login failed');
+      throw new Error(data?.detail || 'Login failed');
     }
     
-    const userData = await response.json();
-    // Store session token for persistence
-    if (userData.session_token) {
-      updateToken(userData.session_token);
+    if (!data) {
+      throw new Error('Server error. Please try again.');
     }
-    setUser(userData);
-    return userData;
+    
+    if (data.session_token) {
+      updateToken(data.session_token);
+    }
+    setUser(data);
+    return data;
   };
 
   const register = async (name, email, password) => {
@@ -115,23 +122,24 @@ export const AuthProvider = ({ children }) => {
       body: JSON.stringify({ name, email, password })
     });
     
+    const data = await safeJson(response);
+    
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Registration failed');
+      throw new Error(data?.detail || 'Registration failed');
     }
     
-    const userData = await response.json();
-    // Store session token for persistence
-    if (userData.session_token) {
-      updateToken(userData.session_token);
+    if (!data) {
+      throw new Error('Server error. Please try again.');
     }
-    setUser(userData);
-    return userData;
+    
+    if (data.session_token) {
+      updateToken(data.session_token);
+    }
+    setUser(data);
+    return data;
   };
 
-  // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
   const loginWithGoogle = () => {
-    // Redirect to our own backend which initiates the Google OAuth flow
     window.location.href = `${API}/auth/google`;
   };
 
@@ -143,17 +151,21 @@ export const AuthProvider = ({ children }) => {
       body: JSON.stringify({ code, redirect_uri: redirectUri })
     });
     
+    const data = await safeJson(response);
+    
     if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      throw new Error(err.detail || 'Google sign-in failed');
+      throw new Error(data?.detail || 'Google sign-in failed');
     }
     
-    const userData = await response.json();
-    if (userData.session_token) {
-      updateToken(userData.session_token);
+    if (!data) {
+      throw new Error('Server error. Please try again.');
     }
-    setUser(userData);
-    return userData;
+    
+    if (data.session_token) {
+      updateToken(data.session_token);
+    }
+    setUser(data);
+    return data;
   };
 
   const logout = async () => {
