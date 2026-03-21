@@ -464,98 +464,118 @@ async def log_card_activity(
 
 @api_router.post("/auth/register")
 async def register(data: UserCreate):
-    existing = await db.users.find_one({"email": data.email}, {"_id": 0})
-    if existing:
-        raise HTTPException(status_code=400, detail="Email already registered")
-    
-    user_id = f"user_{uuid.uuid4().hex[:12]}"
-    hashed_pw = hash_password(data.password)
-    
-    # Check if first user - make them admin
-    user_count = await db.users.count_documents({})
-    role = UserRole.ADMIN if user_count == 0 else UserRole.NORMAL
-    
-    user_doc = {
-        "user_id": user_id,
-        "email": data.email,
-        "name": data.name,
-        "password_hash": hashed_pw,
-        "role": role,
-        "picture": None,
-        "created_at": datetime.now(timezone.utc).isoformat()
-    }
-    await db.users.insert_one(user_doc)
-    
-    # Create session
-    session_token = f"sess_{uuid.uuid4().hex}"
-    session_doc = {
-        "user_id": user_id,
-        "session_token": session_token,
-        "expires_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
-        "created_at": datetime.now(timezone.utc).isoformat()
-    }
-    await db.user_sessions.insert_one(session_doc)
-    
-    # Process pending invites for this email
-    pending_invites = await db.pending_invites.find({"email": data.email}).to_list(100)
-    for invite in pending_invites:
-        if invite["invite_type"] == "card":
-            # Add user to card
-            new_member = {
-                "user_id": user_id,
-                "name": data.name,
-                "email": data.email,
-                "picture": None
-            }
-            await db.cards.update_one(
-                {"card_id": invite["target_id"]},
-                {"$push": {"assigned_members": new_member}}
-            )
-            # Create notification
-            notif_doc = {
-                "notification_id": f"notif_{uuid.uuid4().hex[:12]}",
-                "user_id": user_id,
-                "type": "card_assignment",
-                "title": "You've been added to a card",
-                "message": f"{invite['invited_by_name']} added you to '{invite.get('card_title', 'a card')}'",
-                "board_id": invite["board_id"],
-                "card_id": invite["target_id"],
-                "from_user_id": invite["invited_by"],
-                "from_user_name": invite["invited_by_name"],
-                "read": False,
-                "created_at": datetime.now(timezone.utc).isoformat()
-            }
-            await db.notifications.insert_one(notif_doc)
-    
-    # Delete processed invites
-    if pending_invites:
-        await db.pending_invites.delete_many({"email": data.email})
-    
-    return {"user_id": user_id, "email": data.email, "name": data.name, "role": role, "session_token": session_token}
+    logger.info(f"[REGISTER] Attempt for email: {data.email}")
+    try:
+        existing = await db.users.find_one({"email": data.email}, {"_id": 0})
+        if existing:
+            logger.warning(f"[REGISTER] Email already exists: {data.email}")
+            raise HTTPException(status_code=400, detail="Email already registered")
+        
+        user_id = f"user_{uuid.uuid4().hex[:12]}"
+        hashed_pw = hash_password(data.password)
+        
+        user_count = await db.users.count_documents({})
+        role = UserRole.ADMIN if user_count == 0 else UserRole.NORMAL
+        logger.info(f"[REGISTER] Creating user {user_id}, role={role}, db={db.name}")
+        
+        user_doc = {
+            "user_id": user_id,
+            "email": data.email,
+            "name": data.name,
+            "password_hash": hashed_pw,
+            "role": role,
+            "picture": None,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.users.insert_one(user_doc)
+        logger.info(f"[REGISTER] User inserted into DB: {user_id}")
+        
+        session_token = f"sess_{uuid.uuid4().hex}"
+        session_doc = {
+            "user_id": user_id,
+            "session_token": session_token,
+            "expires_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.user_sessions.insert_one(session_doc)
+        logger.info(f"[REGISTER] Session created for {user_id}")
+        
+        # Process pending invites for this email
+        pending_invites = await db.pending_invites.find({"email": data.email}).to_list(100)
+        for invite in pending_invites:
+            if invite["invite_type"] == "card":
+                new_member = {
+                    "user_id": user_id,
+                    "name": data.name,
+                    "email": data.email,
+                    "picture": None
+                }
+                await db.cards.update_one(
+                    {"card_id": invite["target_id"]},
+                    {"$push": {"assigned_members": new_member}}
+                )
+                notif_doc = {
+                    "notification_id": f"notif_{uuid.uuid4().hex[:12]}",
+                    "user_id": user_id,
+                    "type": "card_assignment",
+                    "title": "You've been added to a card",
+                    "message": f"{invite['invited_by_name']} added you to '{invite.get('card_title', 'a card')}'",
+                    "board_id": invite["board_id"],
+                    "card_id": invite["target_id"],
+                    "from_user_id": invite["invited_by"],
+                    "from_user_name": invite["invited_by_name"],
+                    "read": False,
+                    "created_at": datetime.now(timezone.utc).isoformat()
+                }
+                await db.notifications.insert_one(notif_doc)
+        
+        if pending_invites:
+            await db.pending_invites.delete_many({"email": data.email})
+        
+        logger.info(f"[REGISTER] SUCCESS for {data.email}")
+        return {"user_id": user_id, "email": data.email, "name": data.name, "role": role, "session_token": session_token}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[REGISTER] FAILED for {data.email}: {e}")
+        raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
 
 @api_router.post("/auth/login")
 async def login(data: UserLogin):
-    user = await db.users.find_one({"email": data.email}, {"_id": 0})
-    if not user or not verify_password(data.password, user.get("password_hash", "")):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    
-    session_token = f"sess_{uuid.uuid4().hex}"
-    session_doc = {
-        "user_id": user["user_id"],
-        "session_token": session_token,
-        "expires_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
-        "created_at": datetime.now(timezone.utc).isoformat()
-    }
-    await db.user_sessions.insert_one(session_doc)
-    
-    return {
-        "user_id": user["user_id"],
-        "email": user["email"],
-        "name": user["name"],
-        "role": user.get("role", UserRole.NORMAL),
-        "picture": user.get("picture"),
-        "session_token": session_token
-    }
+    logger.info(f"[LOGIN] Attempt for email: {data.email}, db={db.name}")
+    try:
+        user = await db.users.find_one({"email": data.email}, {"_id": 0})
+        if not user:
+            logger.warning(f"[LOGIN] User not found: {data.email}")
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+        
+        if not verify_password(data.password, user.get("password_hash", "")):
+            logger.warning(f"[LOGIN] Wrong password for: {data.email}")
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+        
+        session_token = f"sess_{uuid.uuid4().hex}"
+        session_doc = {
+            "user_id": user["user_id"],
+            "session_token": session_token,
+            "expires_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.user_sessions.insert_one(session_doc)
+        logger.info(f"[LOGIN] SUCCESS for {data.email}, user_id={user['user_id']}")
+        
+        return {
+            "user_id": user["user_id"],
+            "email": user["email"],
+            "name": user["name"],
+            "role": user.get("role", UserRole.NORMAL),
+            "picture": user.get("picture"),
+            "session_token": session_token
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[LOGIN] FAILED for {data.email}: {e}")
+        raise HTTPException(status_code=500, detail=f"Login failed: {str(e)}")
 
 # ============== GOOGLE OAUTH ==============
 # REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
@@ -569,13 +589,13 @@ async def google_login(request: Request):
     """Initiate Google OAuth flow - redirects user to Google sign-in"""
     client_id = os.environ.get("GOOGLE_CLIENT_ID")
     if not client_id:
+        logger.error("[GOOGLE_OAUTH] GOOGLE_CLIENT_ID not set")
         raise HTTPException(status_code=500, detail="Google OAuth not configured")
     
-    # Build redirect URI — Google redirects back to the frontend callback page
     frontend_url = os.environ.get("FRONTEND_URL", str(request.base_url).rstrip("/"))
     redirect_uri = f"{frontend_url}/auth/google/callback"
+    logger.info(f"[GOOGLE_OAUTH] Init: redirect_uri={redirect_uri}, frontend_url={frontend_url}")
     
-    # Build Google OAuth URL
     params = {
         "client_id": client_id,
         "redirect_uri": redirect_uri,
@@ -594,6 +614,7 @@ async def google_callback(request: Request):
     body = await request.json()
     code = body.get("code")
     redirect_uri = body.get("redirect_uri")
+    logger.info(f"[GOOGLE_CALLBACK] Received code={'yes' if code else 'no'}, redirect_uri={redirect_uri}, db={db.name}")
     
     if not code:
         raise HTTPException(status_code=400, detail="Authorization code required")
@@ -602,89 +623,98 @@ async def google_callback(request: Request):
     client_secret = os.environ.get("GOOGLE_CLIENT_SECRET")
     
     if not client_id or not client_secret:
+        logger.error("[GOOGLE_CALLBACK] Missing GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET")
         raise HTTPException(status_code=500, detail="Google OAuth not configured")
     
-    # Exchange authorization code for tokens
-    async with httpx.AsyncClient() as http_client:
-        token_resp = await http_client.post(GOOGLE_TOKEN_URL, data={
-            "code": code,
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "redirect_uri": redirect_uri,
-            "grant_type": "authorization_code"
-        })
+    try:
+        async with httpx.AsyncClient() as http_client:
+            token_resp = await http_client.post(GOOGLE_TOKEN_URL, data={
+                "code": code,
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "redirect_uri": redirect_uri,
+                "grant_type": "authorization_code"
+            })
+            
+            logger.info(f"[GOOGLE_CALLBACK] Token exchange status: {token_resp.status_code}")
+            if token_resp.status_code != 200:
+                logger.error(f"[GOOGLE_CALLBACK] Token exchange failed: {token_resp.text}")
+                raise HTTPException(status_code=401, detail="Failed to exchange authorization code")
+            
+            tokens = token_resp.json()
+            access_token = tokens.get("access_token")
+            
+            if not access_token:
+                logger.error("[GOOGLE_CALLBACK] No access_token in response")
+                raise HTTPException(status_code=401, detail="No access token received")
+            
+            user_resp = await http_client.get(GOOGLE_USERINFO_URL, headers={
+                "Authorization": f"Bearer {access_token}"
+            })
+            
+            logger.info(f"[GOOGLE_CALLBACK] Userinfo status: {user_resp.status_code}")
+            if user_resp.status_code != 200:
+                raise HTTPException(status_code=401, detail="Failed to get user info")
+            
+            google_user = user_resp.json()
         
-        if token_resp.status_code != 200:
-            raise HTTPException(status_code=401, detail="Failed to exchange authorization code")
+        email = google_user.get("email")
+        name = google_user.get("name", email.split("@")[0])
+        picture = google_user.get("picture")
+        logger.info(f"[GOOGLE_CALLBACK] Google user: {email}")
         
-        tokens = token_resp.json()
-        access_token = tokens.get("access_token")
+        if not email:
+            raise HTTPException(status_code=401, detail="No email in Google response")
         
-        if not access_token:
-            raise HTTPException(status_code=401, detail="No access token received")
+        existing_user = await db.users.find_one({"email": email}, {"_id": 0})
         
-        # Get user info from Google
-        user_resp = await http_client.get(GOOGLE_USERINFO_URL, headers={
-            "Authorization": f"Bearer {access_token}"
-        })
+        if existing_user:
+            user_id = existing_user["user_id"]
+            await db.users.update_one(
+                {"user_id": user_id},
+                {"$set": {"name": name, "picture": picture}}
+            )
+            role = existing_user.get("role", UserRole.NORMAL)
+            logger.info(f"[GOOGLE_CALLBACK] Existing user: {user_id}")
+        else:
+            user_id = f"user_{uuid.uuid4().hex[:12]}"
+            user_count = await db.users.count_documents({})
+            role = UserRole.ADMIN if user_count == 0 else UserRole.NORMAL
+            
+            user_doc = {
+                "user_id": user_id,
+                "email": email,
+                "name": name,
+                "picture": picture,
+                "role": role,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }
+            await db.users.insert_one(user_doc)
+            logger.info(f"[GOOGLE_CALLBACK] New user created: {user_id}")
         
-        if user_resp.status_code != 200:
-            raise HTTPException(status_code=401, detail="Failed to get user info")
+        session_token = f"sess_{uuid.uuid4().hex}"
+        session_doc = {
+            "user_id": user_id,
+            "session_token": session_token,
+            "expires_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.user_sessions.insert_one(session_doc)
+        logger.info(f"[GOOGLE_CALLBACK] SUCCESS for {email}")
         
-        google_user = user_resp.json()
-    
-    email = google_user.get("email")
-    name = google_user.get("name", email.split("@")[0])
-    picture = google_user.get("picture")
-    
-    if not email:
-        raise HTTPException(status_code=401, detail="No email in Google response")
-    
-    # Check if user exists
-    existing_user = await db.users.find_one({"email": email}, {"_id": 0})
-    
-    if existing_user:
-        user_id = existing_user["user_id"]
-        # Update name and picture if changed
-        await db.users.update_one(
-            {"user_id": user_id},
-            {"$set": {"name": name, "picture": picture}}
-        )
-        role = existing_user.get("role", UserRole.NORMAL)
-    else:
-        # Create new user
-        user_id = f"user_{uuid.uuid4().hex[:12]}"
-        user_count = await db.users.count_documents({})
-        role = UserRole.ADMIN if user_count == 0 else UserRole.NORMAL
-        
-        user_doc = {
+        return {
             "user_id": user_id,
             "email": email,
             "name": name,
-            "picture": picture,
             "role": role,
-            "created_at": datetime.now(timezone.utc).isoformat()
+            "picture": picture,
+            "session_token": session_token
         }
-        await db.users.insert_one(user_doc)
-    
-    # Create session
-    session_token = f"sess_{uuid.uuid4().hex}"
-    session_doc = {
-        "user_id": user_id,
-        "session_token": session_token,
-        "expires_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
-        "created_at": datetime.now(timezone.utc).isoformat()
-    }
-    await db.user_sessions.insert_one(session_doc)
-    
-    return {
-        "user_id": user_id,
-        "email": email,
-        "name": name,
-        "role": role,
-        "picture": picture,
-        "session_token": session_token
-    }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[GOOGLE_CALLBACK] FAILED: {e}")
+        raise HTTPException(status_code=500, detail=f"Google sign-in failed: {str(e)}")
 
 @api_router.get("/auth/me")
 async def get_me(user: User = Depends(get_current_user)):
@@ -3193,6 +3223,18 @@ async def serve_upload(folder: str, filename: str):
 
 # Include the router in the main app
 app.include_router(api_router)
+
+@app.on_event("startup")
+async def startup_db_check():
+    """Verify database connectivity at startup"""
+    try:
+        result = await db.command("ping")
+        user_count = await db.users.count_documents({})
+        session_count = await db.user_sessions.count_documents({})
+        logger.info(f"[STARTUP] DB connected: {db.name}, ping={result}, users={user_count}, sessions={session_count}")
+    except Exception as e:
+        logger.error(f"[STARTUP] DB connection FAILED: {e}")
+
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
