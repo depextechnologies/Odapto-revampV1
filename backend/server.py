@@ -53,7 +53,18 @@ app.add_middleware(
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Error-Detail"],
 )
+
+# Custom exception handler to pass error messages via headers (prevents body-consumed issues)
+@app.exception_handler(HTTPException)
+async def custom_http_exception_handler(request: Request, exc: HTTPException):
+    from starlette.responses import JSONResponse
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+        headers={"X-Error-Detail": str(exc.detail)} if exc.detail else {}
+    )
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
@@ -468,8 +479,11 @@ async def register(data: UserCreate):
     try:
         existing = await db.users.find_one({"email": data.email}, {"_id": 0})
         if existing:
+            if not existing.get("password_hash"):
+                logger.warning(f"[REGISTER] Google OAuth user tried manual registration: {data.email}")
+                raise HTTPException(status_code=400, detail="This email is already registered with Google. Please use 'Continue with Google' to sign in.")
             logger.warning(f"[REGISTER] Email already exists: {data.email}")
-            raise HTTPException(status_code=400, detail="Email already registered")
+            raise HTTPException(status_code=400, detail="This email is already registered. Please try with a different email or sign in to your existing account.")
         
         user_id = f"user_{uuid.uuid4().hex[:12]}"
         hashed_pw = hash_password(data.password)
@@ -547,11 +561,15 @@ async def login(data: UserLogin):
         user = await db.users.find_one({"email": data.email}, {"_id": 0})
         if not user:
             logger.warning(f"[LOGIN] User not found: {data.email}")
-            raise HTTPException(status_code=401, detail="Invalid credentials")
+            raise HTTPException(status_code=401, detail="Your email id or password is incorrect, please try again with correct credentials")
+        
+        if not user.get("password_hash"):
+            logger.warning(f"[LOGIN] Google OAuth user tried password login: {data.email}")
+            raise HTTPException(status_code=401, detail="This account was registered with Google. Please use 'Continue with Google' to sign in.")
         
         if not verify_password(data.password, user.get("password_hash", "")):
             logger.warning(f"[LOGIN] Wrong password for: {data.email}")
-            raise HTTPException(status_code=401, detail="Invalid credentials")
+            raise HTTPException(status_code=401, detail="Your email id or password is incorrect, please try again with correct credentials")
         
         session_token = f"sess_{uuid.uuid4().hex}"
         session_doc = {
@@ -1789,6 +1807,7 @@ async def get_board_members(board_id: str, user: User = Depends(get_current_user
         raise HTTPException(status_code=404, detail="Board not found")
     
     # Get full user info for each member
+    board_owner = board.get("created_by")
     members = []
     for member in board.get("members", []):
         user_info = await db.users.find_one(
@@ -1796,13 +1815,18 @@ async def get_board_members(board_id: str, user: User = Depends(get_current_user
             {"_id": 0, "password_hash": 0}
         )
         if user_info:
+            is_owner = member["user_id"] == board_owner
             members.append({
                 **member,
                 "name": user_info.get("name"),
                 "email": user_info.get("email"),
-                "picture": user_info.get("picture")
+                "picture": user_info.get("picture"),
+                "is_owner": is_owner,
+                "role_label": "Board owner" if is_owner else "Board member"
             })
     
+    # Sort: owner first
+    members.sort(key=lambda m: (not m["is_owner"], m.get("name", "")))
     return members
 
 # ============== NOTIFICATIONS ==============

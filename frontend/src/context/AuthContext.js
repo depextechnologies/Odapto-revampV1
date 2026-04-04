@@ -82,8 +82,12 @@ export const AuthProvider = ({ children }) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password })
     });
-    const data = await parseResponse(response);
-    if (!response.ok) throw new Error(data?.detail || 'Login failed');
+    if (!response.ok) {
+      const errorMsg = response.headers.get('X-Error-Detail') || 'Your email id or password is incorrect, please try again with correct credentials';
+      throw new Error(errorMsg);
+    }
+    let data;
+    try { const c = response.clone(); data = await c.json(); } catch { data = null; }
     if (!data) throw new Error('Server error. Please try again.');
     updateToken(data.session_token);
     setUser(data);
@@ -96,8 +100,12 @@ export const AuthProvider = ({ children }) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, email, password })
     });
-    const data = await parseResponse(response);
-    if (!response.ok) throw new Error(data?.detail || 'Registration failed');
+    if (!response.ok) {
+      const errorMsg = response.headers.get('X-Error-Detail') || 'Registration failed. Please try again.';
+      throw new Error(errorMsg);
+    }
+    let data;
+    try { const c = response.clone(); data = await c.json(); } catch { data = null; }
     if (!data) throw new Error('Server error. Please try again.');
     updateToken(data.session_token);
     setUser(data);
@@ -115,8 +123,12 @@ export const AuthProvider = ({ children }) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code, redirect_uri: redirectUri })
     });
-    const data = await parseResponse(response);
-    if (!response.ok) throw new Error(data?.detail || 'Google sign-in failed');
+    if (!response.ok) {
+      const errorMsg = response.headers.get('X-Error-Detail') || 'Google sign-in failed';
+      throw new Error(errorMsg);
+    }
+    let data;
+    try { const c = response.clone(); data = await c.json(); } catch { data = null; }
     if (!data) throw new Error('Server error. Please try again.');
     updateToken(data.session_token);
     setUser(data);

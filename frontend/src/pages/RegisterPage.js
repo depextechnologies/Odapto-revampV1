@@ -7,8 +7,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { toast } from 'sonner';
 import { Moon, Sun, Eye, EyeOff } from 'lucide-react';
-
-const LOGO_URL = "/odapto-logo-new.png";
+import ThemeLogo from '../components/ThemeLogo';
 
 export default function RegisterPage() {
   const [name, setName] = useState('');
@@ -61,7 +60,7 @@ export default function RegisterPage() {
           {/* Header */}
           <div className="flex items-center justify-between mb-8">
             <Link to="/" className="flex items-center gap-2">
-              <img src={LOGO_URL} alt="Odapto" className="h-8 w-auto" />
+              <ThemeLogo className="h-10 w-auto" />
             </Link>
             <button
               onClick={toggleTheme}
@@ -201,7 +200,7 @@ export default function RegisterPage() {
       <div className="hidden lg:flex flex-1 bg-gradient-to-br from-odapto-teal/10 via-background to-odapto-orange/10 items-center justify-center p-12">
         <div className="max-w-lg text-center">
           <div className="w-32 h-32 mx-auto mb-8 rounded-2xl bg-odapto-teal/20 flex items-center justify-center">
-            <img src={LOGO_URL} alt="Odapto" className="w-20 h-auto" />
+            <ThemeLogo className="w-20 h-auto" />
           </div>
           <h2 className="font-heading text-2xl font-bold mb-4">
             Join thousands of productive teams

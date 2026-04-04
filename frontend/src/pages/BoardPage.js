@@ -877,7 +877,9 @@ export default function BoardPage() {
                             </Avatar>
                             <div>
                               <p className="text-sm font-medium">{member.name}</p>
-                              <p className="text-xs text-muted-foreground capitalize">{member.role}</p>
+                              <p className={`text-xs ${member.is_owner ? 'text-odapto-orange font-medium' : 'text-muted-foreground'}`}>
+                                {member.role_label || (member.is_owner ? 'Board owner' : 'Board member')}
+                              </p>
                             </div>
                           </div>
                           {board?.created_by === user?.user_id && member.user_id !== user?.user_id && (
