@@ -2732,6 +2732,56 @@ async def get_template(template_id: str):
     
     return template
 
+@api_router.put("/templates/{template_id}")
+async def update_template(template_id: str, request: Request, user: User = Depends(get_current_user)):
+    """Update a template. Admins can update any template. Privileged users can update their own."""
+    template = await db.boards.find_one({"board_id": template_id, "is_template": True}, {"_id": 0})
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    
+    if user.role != UserRole.ADMIN and template.get("created_by") != user.user_id:
+        raise HTTPException(status_code=403, detail="You can only edit templates you created")
+    
+    body = await request.json()
+    update_fields = {}
+    if "template_name" in body:
+        update_fields["template_name"] = body["template_name"]
+    if "template_description" in body:
+        update_fields["template_description"] = body["template_description"]
+    if "category_id" in body:
+        category = await db.template_categories.find_one({"category_id": body["category_id"]}, {"_id": 0})
+        if not category:
+            raise HTTPException(status_code=404, detail="Category not found")
+        update_fields["template_category_id"] = body["category_id"]
+    
+    if not update_fields:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    
+    update_fields["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.boards.update_one({"board_id": template_id}, {"$set": update_fields})
+    
+    updated = await db.boards.find_one({"board_id": template_id}, {"_id": 0})
+    return updated
+
+@api_router.delete("/templates/{template_id}")
+async def delete_template(template_id: str, user: User = Depends(get_current_user)):
+    """Delete a template. Admins can delete any. Privileged users can delete their own."""
+    template = await db.boards.find_one({"board_id": template_id, "is_template": True}, {"_id": 0})
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    
+    if user.role != UserRole.ADMIN and template.get("created_by") != user.user_id:
+        raise HTTPException(status_code=403, detail="You can only delete templates you created")
+    
+    # Delete template's lists and cards
+    lists = await db.lists.find({"board_id": template_id}, {"_id": 0}).to_list(100)
+    for lst in lists:
+        await db.cards.delete_many({"list_id": lst["list_id"]})
+    await db.lists.delete_many({"board_id": template_id})
+    await db.boards.delete_one({"board_id": template_id})
+    
+    return {"message": "Template deleted successfully"}
+
 @api_router.post("/templates/{template_id}/use")
 async def use_template(template_id: str, request: Request, user: User = Depends(get_current_user)):
     body = await request.json()

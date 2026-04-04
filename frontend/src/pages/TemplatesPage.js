@@ -23,12 +23,12 @@ import {
   Square,
   Eye,
   Users,
-  X
+  X,
+  Pencil,
+  Trash2
 } from 'lucide-react';
 
 import { API } from '../config';
-
-const LOGO_URL = "/odapto-logo-new.png";
 
 export default function TemplatesPage() {
   const { user, isAuthenticated } = useAuth();
@@ -51,6 +51,14 @@ export default function TemplatesPage() {
   const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
   const [previewTemplate, setPreviewTemplate] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+
+  // Edit state
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editTemplate, setEditTemplate] = useState(null);
+  const [editName, setEditName] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const [editCategory, setEditCategory] = useState('');
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -115,6 +123,64 @@ export default function TemplatesPage() {
     setNewBoardName(template.template_name || '');
     setPreviewDialogOpen(false);
     setUseDialogOpen(true);
+  };
+
+  const canManageTemplate = (template) => {
+    if (!user) return false;
+    if (user.role === 'admin') return true;
+    return template.created_by === user.user_id;
+  };
+
+  const handleEditTemplate = (template) => {
+    setEditTemplate(template);
+    setEditName(template.template_name || '');
+    setEditDesc(template.template_description || '');
+    setEditCategory(template.template_category_id || '');
+    setEditDialogOpen(true);
+  };
+
+  const saveTemplateEdit = async (e) => {
+    e.preventDefault();
+    if (!editName.trim()) return;
+    setSaving(true);
+    try {
+      const response = await apiPost(`/templates/${editTemplate.board_id}`, {
+        template_name: editName,
+        template_description: editDesc,
+        ...(editCategory ? { category_id: editCategory } : {})
+      }, 'PUT');
+      if (response.ok) {
+        toast.success('Template updated!');
+        setEditDialogOpen(false);
+        fetchData();
+      } else {
+        const err = response.headers.get('X-Error-Detail') || 'Failed to update template';
+        toast.error(err);
+      }
+    } catch {
+      toast.error('Failed to update template');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteTemplate = async (template) => {
+    if (!window.confirm(`Delete template "${template.template_name}"? This cannot be undone.`)) return;
+    try {
+      const response = await fetch(`${API}/templates/${template.board_id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('odapto_session') || sessionStorage.getItem('odapto_session')}` }
+      });
+      if (response.ok) {
+        toast.success('Template deleted');
+        fetchData();
+      } else {
+        const err = response.headers.get('X-Error-Detail') || 'Failed to delete template';
+        toast.error(err);
+      }
+    } catch {
+      toast.error('Failed to delete template');
+    }
   };
 
   const useTemplate = async (e) => {
@@ -323,15 +389,39 @@ export default function TemplatesPage() {
                         <span>{template.creator?.name || 'Unknown'}</span>
                       </div>
                       
-                      <Button
-                        size="sm"
-                        onClick={() => handleUseTemplate(template)}
-                        className="bg-odapto-orange hover:bg-odapto-orange-hover text-white"
-                        data-testid={`use-template-${template.board_id}`}
-                      >
-                        Use Template
-                        <ArrowRight className="w-4 h-4 ml-1" />
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        {canManageTemplate(template) && (
+                          <>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8"
+                              onClick={(e) => { e.stopPropagation(); handleEditTemplate(template); }}
+                              data-testid={`edit-template-${template.board_id}`}
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 text-destructive hover:text-destructive"
+                              onClick={(e) => { e.stopPropagation(); handleDeleteTemplate(template); }}
+                              data-testid={`delete-template-${template.board_id}`}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </>
+                        )}
+                        <Button
+                          size="sm"
+                          onClick={() => handleUseTemplate(template)}
+                          className="bg-odapto-orange hover:bg-odapto-orange-hover text-white"
+                          data-testid={`use-template-${template.board_id}`}
+                        >
+                          Use Template
+                          <ArrowRight className="w-4 h-4 ml-1" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </div>
