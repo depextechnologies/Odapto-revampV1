@@ -65,15 +65,16 @@ Odapto is a production-grade Kanban-based work management SaaS similar to Trello
 - [x] X-Error-Detail header system for reliable error delivery
 - [x] .gitignore cleanup (removed *.env blocking for deployment)
 - [x] Smart DB selection using get_default_database() for Atlas
+- [x] LOGO_URL undefined fix in TemplatesPage.js (replaced with ResponsiveLogo)
 
 ## Prioritized Backlog
 
-### P0 (In Progress) - Medium Effort Items from Bug List
-- [ ] Admin Template Control (edit/delete any templates)
-- [ ] Privilege User Template Permissions
-- [ ] Board Creation Template Preview
-- [ ] Remember User Login (web + mobile)
-- [ ] Gmail Auth Flow (mobile return to app)
+### P0 (Completed) - Medium Effort Items from Bug List
+- [x] Admin Template Control (edit/delete any templates) - Feb 2026
+- [x] Privilege User Template Permissions (creators can edit/delete own) - Feb 2026
+- [x] Board Creation Template Preview (preview dialog with lists/cards) - Feb 2026
+- [x] Remember User Login (web: localStorage vs sessionStorage, checkbox on login) - Feb 2026
+- [ ] Gmail Auth Flow (mobile return to app after Google OAuth)
 
 ### P1 - High Effort Items from Bug List
 - [ ] Cloud Storage: Google Drive integration for attachments
