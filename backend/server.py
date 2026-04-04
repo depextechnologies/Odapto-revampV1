@@ -481,9 +481,9 @@ async def register(data: UserCreate):
         if existing:
             if not existing.get("password_hash"):
                 logger.warning(f"[REGISTER] Google OAuth user tried manual registration: {data.email}")
-                raise HTTPException(status_code=400, detail="This email is already registered with Google. Please use 'Continue with Google' to sign in.")
+                raise HTTPException(status_code=400, detail="This email ID already exists, please try any other email")
             logger.warning(f"[REGISTER] Email already exists: {data.email}")
-            raise HTTPException(status_code=400, detail="This email is already registered. Please try with a different email or sign in to your existing account.")
+            raise HTTPException(status_code=400, detail="This email ID already exists, please try any other email")
         
         user_id = f"user_{uuid.uuid4().hex[:12]}"
         hashed_pw = hash_password(data.password)

@@ -101,7 +101,8 @@ export const AuthProvider = ({ children }) => {
       body: JSON.stringify({ name, email, password })
     });
     if (!response.ok) {
-      const errorMsg = response.headers.get('X-Error-Detail') || 'Registration failed. Please try again.';
+      const errorMsg = response.headers.get('X-Error-Detail')
+        || (response.status === 400 ? 'This email ID already exists, please try any other email' : 'Registration failed. Please try again.');
       throw new Error(errorMsg);
     }
     let data;
