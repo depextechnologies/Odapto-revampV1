@@ -83,7 +83,8 @@ export const AuthProvider = ({ children }) => {
       body: JSON.stringify({ email, password })
     });
     if (!response.ok) {
-      const errorMsg = response.headers.get('X-Error-Detail') || 'Your email id or password is incorrect, please try again with correct credentials';
+      const errorMsg = response.headers.get('X-Error-Detail')
+        || (response.status === 401 ? 'Your username or password is wrong, please try again' : 'Login failed. Please try again.');
       throw new Error(errorMsg);
     }
     let data;

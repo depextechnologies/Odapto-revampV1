@@ -561,15 +561,15 @@ async def login(data: UserLogin):
         user = await db.users.find_one({"email": data.email}, {"_id": 0})
         if not user:
             logger.warning(f"[LOGIN] User not found: {data.email}")
-            raise HTTPException(status_code=401, detail="Your email id or password is incorrect, please try again with correct credentials")
+            raise HTTPException(status_code=401, detail="Your username or password is wrong, please try again")
         
         if not user.get("password_hash"):
             logger.warning(f"[LOGIN] Google OAuth user tried password login: {data.email}")
-            raise HTTPException(status_code=401, detail="This account was registered with Google. Please use 'Continue with Google' to sign in.")
+            raise HTTPException(status_code=401, detail="Your username or password is wrong, please try again")
         
         if not verify_password(data.password, user.get("password_hash", "")):
             logger.warning(f"[LOGIN] Wrong password for: {data.email}")
-            raise HTTPException(status_code=401, detail="Your email id or password is incorrect, please try again with correct credentials")
+            raise HTTPException(status_code=401, detail="Your username or password is wrong, please try again")
         
         session_token = f"sess_{uuid.uuid4().hex}"
         session_doc = {
