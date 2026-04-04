@@ -4,10 +4,27 @@ import { API } from '../config';
 const AuthContext = createContext(null);
 
 const TOKEN_KEY = 'odapto_session_token';
-const getStoredToken = () => localStorage.getItem(TOKEN_KEY);
-const setStoredToken = (token) => {
-  if (token) localStorage.setItem(TOKEN_KEY, token);
-  else localStorage.removeItem(TOKEN_KEY);
+const REMEMBER_KEY = 'odapto_remember';
+
+const getStoredToken = () =>
+  localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
+
+const setStoredToken = (token, remember = true) => {
+  if (token) {
+    if (remember) {
+      localStorage.setItem(TOKEN_KEY, token);
+      localStorage.setItem(REMEMBER_KEY, 'true');
+      sessionStorage.removeItem(TOKEN_KEY);
+    } else {
+      sessionStorage.setItem(TOKEN_KEY, token);
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(REMEMBER_KEY);
+    }
+  } else {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(REMEMBER_KEY);
+    sessionStorage.removeItem(TOKEN_KEY);
+  }
 };
 
 export const useAuth = () => {
@@ -31,9 +48,9 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [sessionToken, setSessionToken] = useState(() => getStoredToken());
 
-  const updateToken = useCallback((token) => {
+  const updateToken = useCallback((token, remember = true) => {
     setSessionToken(token);
-    setStoredToken(token);
+    setStoredToken(token, remember);
   }, []);
 
   const getAuthHeaders = useCallback(() => {
@@ -76,7 +93,7 @@ export const AuthProvider = ({ children }) => {
     checkAuth();
   }, [checkAuth]);
 
-  const login = async (email, password) => {
+  const login = async (email, password, remember = true) => {
     const response = await fetch(`${API}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -90,7 +107,7 @@ export const AuthProvider = ({ children }) => {
     let data;
     try { const c = response.clone(); data = await c.json(); } catch { data = null; }
     if (!data) throw new Error('Server error. Please try again.');
-    updateToken(data.session_token);
+    updateToken(data.session_token, remember);
     setUser(data);
     return data;
   };
@@ -146,7 +163,7 @@ export const AuthProvider = ({ children }) => {
       });
     } catch {}
     setUser(null);
-    updateToken(null);
+    updateToken(null, false);
   };
 
   const value = useMemo(() => ({

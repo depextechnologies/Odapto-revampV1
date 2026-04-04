@@ -1,7 +1,8 @@
 // API utility for making authenticated requests
 import { API } from '../config';
 
-const getStoredToken = () => localStorage.getItem('odapto_session_token');
+const getStoredToken = () =>
+  localStorage.getItem('odapto_session_token') || sessionStorage.getItem('odapto_session_token');
 
 export const apiCall = async (endpoint, options = {}) => {
   const token = getStoredToken();
@@ -41,7 +42,8 @@ export const apiCall = async (endpoint, options = {}) => {
 
 export const apiGet = (endpoint) => apiCall(endpoint, { method: 'GET' });
 export const apiPost = (endpoint, body) => apiCall(endpoint, { method: 'POST', body });
+export const apiPut = (endpoint, body) => apiCall(endpoint, { method: 'PUT', body });
 export const apiPatch = (endpoint, body) => apiCall(endpoint, { method: 'PATCH', body });
 export const apiDelete = (endpoint) => apiCall(endpoint, { method: 'DELETE' });
 
-export default { apiCall, apiGet, apiPost, apiPatch, apiDelete };
+export default { apiCall, apiGet, apiPost, apiPut, apiPatch, apiDelete };

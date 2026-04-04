@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
-import { apiGet, apiPost } from '../utils/api';
+import { apiGet, apiPost, apiPut, apiDelete } from '../utils/api';
 import { 
   Search, 
   Moon, 
@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 
 import { API } from '../config';
+import { ResponsiveLogo } from '../components/ThemeLogo';
 
 export default function TemplatesPage() {
   const { user, isAuthenticated } = useAuth();
@@ -144,11 +145,11 @@ export default function TemplatesPage() {
     if (!editName.trim()) return;
     setSaving(true);
     try {
-      const response = await apiPost(`/templates/${editTemplate.board_id}`, {
+      const response = await apiPut(`/templates/${editTemplate.board_id}`, {
         template_name: editName,
         template_description: editDesc,
         ...(editCategory ? { category_id: editCategory } : {})
-      }, 'PUT');
+      });
       if (response.ok) {
         toast.success('Template updated!');
         setEditDialogOpen(false);
@@ -167,10 +168,7 @@ export default function TemplatesPage() {
   const handleDeleteTemplate = async (template) => {
     if (!window.confirm(`Delete template "${template.template_name}"? This cannot be undone.`)) return;
     try {
-      const response = await fetch(`${API}/templates/${template.board_id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('odapto_session') || sessionStorage.getItem('odapto_session')}` }
-      });
+      const response = await apiDelete(`/templates/${template.board_id}`);
       if (response.ok) {
         toast.success('Template deleted');
         fetchData();
@@ -222,7 +220,7 @@ export default function TemplatesPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <Link to="/" className="flex items-center gap-2">
-              <img src={LOGO_URL} alt="Odapto" className="h-8 w-auto" />
+              <ResponsiveLogo className="h-8 w-auto" />
             </Link>
 
             <div className="flex items-center gap-3">
@@ -593,6 +591,69 @@ export default function TemplatesPage() {
                 data-testid="use-template-submit-btn"
               >
                 {creating ? 'Creating...' : 'Create Board'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Template Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Template</DialogTitle>
+            <DialogDescription>
+              Update the details for "{editTemplate?.template_name}"
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={saveTemplateEdit} className="space-y-4 mt-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-template-name">Template Name</Label>
+              <Input
+                id="edit-template-name"
+                placeholder="Template name"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                required
+                data-testid="edit-template-name-input"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-template-desc">Description</Label>
+              <Input
+                id="edit-template-desc"
+                placeholder="Template description"
+                value={editDesc}
+                onChange={(e) => setEditDesc(e.target.value)}
+                data-testid="edit-template-desc-input"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Category</Label>
+              <Select value={editCategory} onValueChange={setEditCategory}>
+                <SelectTrigger data-testid="edit-template-category-select">
+                  <SelectValue placeholder="Select a category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map((cat) => (
+                    <SelectItem key={cat.category_id} value={cat.category_id}>
+                      {cat.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex justify-end gap-3">
+              <Button type="button" variant="outline" onClick={() => setEditDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                className="bg-odapto-orange hover:bg-odapto-orange-hover text-white"
+                disabled={saving || !editName.trim()}
+                data-testid="edit-template-save-btn"
+              >
+                {saving ? 'Saving...' : 'Save Changes'}
               </Button>
             </div>
           </form>

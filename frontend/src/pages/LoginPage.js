@@ -13,6 +13,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
   const { login, loginWithGoogle } = useAuth();
   const { theme, toggleTheme } = useTheme();
@@ -29,7 +30,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      await login(email, password);
+      await login(email, password, rememberMe);
       toast.success('Welcome back!');
       navigate(from, { replace: true });
     } catch (error) {
@@ -137,6 +138,20 @@ export default function LoginPage() {
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="remember-me"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="h-4 w-4 rounded border-border accent-odapto-orange cursor-pointer"
+                data-testid="remember-me-checkbox"
+              />
+              <Label htmlFor="remember-me" className="text-sm text-muted-foreground cursor-pointer select-none">
+                Remember me
+              </Label>
             </div>
 
             <Button
