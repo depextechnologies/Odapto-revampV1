@@ -5,14 +5,15 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '../components/ui/dialog';
 import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar';
 import { toast } from 'sonner';
-import { apiGet, apiPost, apiPatch, apiDelete } from '../utils/api';
+import { apiGet, apiPost, apiPut, apiPatch, apiDelete } from '../utils/api';
 import { API } from '../config';
+import { ResponsiveLogo } from '../components/ThemeLogo';
 import { 
   Moon, 
   Sun, 
@@ -25,10 +26,15 @@ import {
   Trash2,
   Shield,
   Crown,
-  User
+  User,
+  Pencil,
+  Eye,
+  List,
+  Square,
+  LayoutTemplate,
+  ChevronRight,
+  ArrowUpRight
 } from 'lucide-react';
-
-const LOGO_URL = "/odapto-logo-new.png";
 
 export default function AdminPage() {
   const { user, logout } = useAuth();
@@ -43,27 +49,59 @@ export default function AdminPage() {
   const [newCategoryDesc, setNewCategoryDesc] = useState('');
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [activeTab, setActiveTab] = useState('overview');
+
+  // Template management state
+  const [templates, setTemplates] = useState([]);
+  const [templateFilter, setTemplateFilter] = useState('all');
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editTemplate, setEditTemplate] = useState(null);
+  const [editName, setEditName] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const [editCategory, setEditCategory] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
+  const [previewTemplate, setPreviewTemplate] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   useEffect(() => {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    fetchTemplates();
+  }, [templateFilter]);
+
   const fetchData = async () => {
     try {
-      const [usersRes, categoriesRes, analyticsRes] = await Promise.all([
+      const [usersRes, categoriesRes, analyticsRes, templatesRes] = await Promise.all([
         apiGet('/admin/users'),
         fetch(`${API}/template-categories`),
-        apiGet('/admin/analytics')
+        apiGet('/admin/analytics'),
+        fetch(`${API}/templates`)
       ]);
 
       if (usersRes.ok) setUsers(await usersRes.json());
       if (categoriesRes.ok) setCategories(await categoriesRes.json());
       if (analyticsRes.ok) setAnalytics(await analyticsRes.json());
+      if (templatesRes.ok) setTemplates(await templatesRes.json());
     } catch (error) {
       console.error('Failed to fetch admin data:', error);
       toast.error('Failed to load admin data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchTemplates = async () => {
+    try {
+      const url = templateFilter !== 'all'
+        ? `${API}/templates?category_id=${templateFilter}`
+        : `${API}/templates`;
+      const res = await fetch(url);
+      if (res.ok) setTemplates(await res.json());
+    } catch (error) {
+      console.error('Failed to fetch templates:', error);
     }
   };
 
@@ -149,6 +187,75 @@ export default function AdminPage() {
     }
   };
 
+  const handleEditTemplate = (template) => {
+    setEditTemplate(template);
+    setEditName(template.template_name || '');
+    setEditDesc(template.template_description || '');
+    setEditCategory(template.template_category_id || '');
+    setEditDialogOpen(true);
+  };
+
+  const saveTemplateEdit = async (e) => {
+    e.preventDefault();
+    if (!editName.trim()) return;
+    setSaving(true);
+    try {
+      const response = await apiPut(`/templates/${editTemplate.board_id}`, {
+        template_name: editName,
+        template_description: editDesc,
+        ...(editCategory ? { category_id: editCategory } : {})
+      });
+      if (response.ok) {
+        toast.success('Template updated!');
+        setEditDialogOpen(false);
+        fetchTemplates();
+      } else {
+        const err = response.headers.get('X-Error-Detail') || 'Failed to update template';
+        toast.error(err);
+      }
+    } catch {
+      toast.error('Failed to update template');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteTemplate = async (template) => {
+    if (!window.confirm(`Delete template "${template.template_name}"? This cannot be undone.`)) return;
+    try {
+      const response = await apiDelete(`/templates/${template.board_id}`);
+      if (response.ok) {
+        toast.success('Template deleted');
+        fetchTemplates();
+        fetchData();
+      } else {
+        const err = response.headers.get('X-Error-Detail') || 'Failed to delete template';
+        toast.error(err);
+      }
+    } catch {
+      toast.error('Failed to delete template');
+    }
+  };
+
+  const handlePreviewTemplate = async (template) => {
+    setPreviewLoading(true);
+    setPreviewDialogOpen(true);
+    try {
+      const response = await fetch(`${API}/templates/${template.board_id}`);
+      if (response.ok) {
+        setPreviewTemplate(await response.json());
+      } else {
+        toast.error('Failed to load template preview');
+        setPreviewDialogOpen(false);
+      }
+    } catch {
+      toast.error('Failed to load template preview');
+      setPreviewDialogOpen(false);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
   const getInitials = (name) => {
     return name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || 'U';
   };
@@ -180,7 +287,7 @@ export default function AdminPage() {
                 <ArrowLeft className="w-5 h-5" />
               </Link>
               <Link to="/" className="flex items-center gap-2">
-                <img src={LOGO_URL} alt="Odapto" className="h-8 w-auto" />
+                <ResponsiveLogo className="h-8 w-auto" />
               </Link>
               <span className="px-3 py-1 rounded-full bg-odapto-orange/10 text-odapto-orange text-sm font-medium">
                 Admin Panel
@@ -200,7 +307,7 @@ export default function AdminPage() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Tabs defaultValue="overview" className="space-y-6">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="bg-muted">
             <TabsTrigger value="overview" className="data-[state=active]:bg-background">
               <BarChart3 className="w-4 h-4 mr-2" />
@@ -209,6 +316,10 @@ export default function AdminPage() {
             <TabsTrigger value="users" className="data-[state=active]:bg-background">
               <Users className="w-4 h-4 mr-2" />
               Users
+            </TabsTrigger>
+            <TabsTrigger value="templates" className="data-[state=active]:bg-background" data-testid="admin-templates-tab">
+              <LayoutTemplate className="w-4 h-4 mr-2" />
+              Templates
             </TabsTrigger>
             <TabsTrigger value="categories" className="data-[state=active]:bg-background">
               <Layers className="w-4 h-4 mr-2" />
@@ -269,13 +380,16 @@ export default function AdminPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3 }}
-                className="p-6 bg-card rounded-xl border border-border"
+                className="p-6 bg-card rounded-xl border border-border cursor-pointer hover:border-purple-500/50 hover:shadow-md transition-all group"
+                onClick={() => setActiveTab('templates')}
+                data-testid="admin-templates-stat-card"
               >
                 <div className="flex items-center gap-3 mb-2">
                   <div className="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center">
                     <Settings className="w-5 h-5 text-purple-500" />
                   </div>
                   <span className="text-muted-foreground">Templates</span>
+                  <ArrowUpRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity ml-auto" />
                 </div>
                 <p className="text-3xl font-bold">{analytics?.totals?.templates || 0}</p>
               </motion.div>
@@ -373,6 +487,140 @@ export default function AdminPage() {
             </div>
           </TabsContent>
 
+          {/* Templates Tab */}
+          <TabsContent value="templates" className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-heading text-2xl font-bold">Template Management</h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {templateFilter !== 'all' 
+                    ? `Filtered by: ${categories.find(c => c.category_id === templateFilter)?.name || 'Unknown'}`
+                    : 'All templates'}
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <Select value={templateFilter} onValueChange={setTemplateFilter}>
+                  <SelectTrigger className="w-48" data-testid="admin-template-category-filter">
+                    <SelectValue placeholder="Filter by category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    {categories.map((cat) => (
+                      <SelectItem key={cat.category_id} value={cat.category_id}>
+                        {cat.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {templates.length === 0 ? (
+              <div className="text-center py-16">
+                <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-muted flex items-center justify-center">
+                  <LayoutTemplate className="w-8 h-8 text-muted-foreground" />
+                </div>
+                <h3 className="font-heading text-lg font-semibold mb-1">No templates found</h3>
+                <p className="text-sm text-muted-foreground">
+                  {templateFilter !== 'all' ? 'No templates in this category.' : 'No templates created yet.'}
+                </p>
+              </div>
+            ) : (
+              <div className="bg-card rounded-xl border border-border overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-muted">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-sm font-medium">Template</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium">Category</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium">Creator</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium">Stats</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {templates.map((template) => (
+                        <tr key={template.board_id} className="hover:bg-muted/50">
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-3">
+                              <div
+                                className="w-10 h-10 rounded-lg flex-shrink-0"
+                                style={{ backgroundColor: template.background || '#3A8B84' }}
+                              />
+                              <div className="min-w-0">
+                                <p className="font-medium truncate">{template.template_name || template.name}</p>
+                                {template.template_description && (
+                                  <p className="text-xs text-muted-foreground truncate max-w-xs">{template.template_description}</p>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="text-sm px-2 py-0.5 rounded-full bg-muted">
+                              {template.category?.name || '—'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-muted-foreground">
+                            {template.creator?.name || 'Unknown'}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                              <span className="flex items-center gap-1">
+                                <List className="w-3.5 h-3.5" />
+                                {template.list_count || 0}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <Square className="w-3.5 h-3.5" />
+                                {template.card_count || 0}
+                              </span>
+                              {template.usage_count > 0 && (
+                                <span className="flex items-center gap-1">
+                                  <Users className="w-3.5 h-3.5" />
+                                  {template.usage_count}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => handlePreviewTemplate(template)}
+                                data-testid={`admin-preview-template-${template.board_id}`}
+                              >
+                                <Eye className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => handleEditTemplate(template)}
+                                data-testid={`admin-edit-template-${template.board_id}`}
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-destructive hover:text-destructive"
+                                onClick={() => handleDeleteTemplate(template)}
+                                data-testid={`admin-delete-template-${template.board_id}`}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </TabsContent>
+
           {/* Categories Tab */}
           <TabsContent value="categories" className="space-y-6">
             <div className="flex items-center justify-between">
@@ -435,19 +683,27 @@ export default function AdminPage() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.05 }}
-                  className="p-4 bg-card rounded-xl border border-border"
+                  className="p-4 bg-card rounded-xl border border-border cursor-pointer hover:border-odapto-orange/50 hover:shadow-md transition-all group"
+                  onClick={() => { setTemplateFilter(category.category_id); setActiveTab('templates'); }}
+                  data-testid={`category-card-${category.category_id}`}
                 >
                   <div className="flex items-start justify-between">
-                    <div>
-                      <h3 className="font-semibold">{category.name}</h3>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold">{category.name}</h3>
+                        <ChevronRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
                       {category.description && (
                         <p className="text-sm text-muted-foreground mt-1">{category.description}</p>
                       )}
+                      <p className="text-xs text-odapto-orange mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        Click to view templates
+                      </p>
                     </div>
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => deleteCategory(category.category_id)}
+                      onClick={(e) => { e.stopPropagation(); deleteCategory(category.category_id); }}
                       className="text-destructive hover:bg-destructive/10"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -465,6 +721,162 @@ export default function AdminPage() {
           </TabsContent>
         </Tabs>
       </main>
+
+      {/* Edit Template Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Template</DialogTitle>
+            <DialogDescription>
+              Update the details for "{editTemplate?.template_name}"
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={saveTemplateEdit} className="space-y-4 mt-4">
+            <div className="space-y-2">
+              <Label htmlFor="admin-edit-template-name">Template Name</Label>
+              <Input
+                id="admin-edit-template-name"
+                placeholder="Template name"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                required
+                data-testid="admin-edit-template-name-input"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="admin-edit-template-desc">Description</Label>
+              <Input
+                id="admin-edit-template-desc"
+                placeholder="Template description"
+                value={editDesc}
+                onChange={(e) => setEditDesc(e.target.value)}
+                data-testid="admin-edit-template-desc-input"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Category</Label>
+              <Select value={editCategory} onValueChange={setEditCategory}>
+                <SelectTrigger data-testid="admin-edit-template-category-select">
+                  <SelectValue placeholder="Select a category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map((cat) => (
+                    <SelectItem key={cat.category_id} value={cat.category_id}>
+                      {cat.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex justify-end gap-3">
+              <Button type="button" variant="outline" onClick={() => setEditDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                className="bg-odapto-orange hover:bg-odapto-orange-hover text-white"
+                disabled={saving || !editName.trim()}
+                data-testid="admin-edit-template-save-btn"
+              >
+                {saving ? 'Saving...' : 'Save Changes'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Template Preview Dialog */}
+      <Dialog open={previewDialogOpen} onOpenChange={setPreviewDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          {previewLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="w-10 h-10 border-4 border-odapto-orange border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : previewTemplate ? (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-3">
+                  <div
+                    className="w-10 h-10 rounded-lg"
+                    style={{ backgroundColor: previewTemplate.background || '#3A8B84' }}
+                  />
+                  <div>
+                    <span className="text-xl">{previewTemplate.template_name}</span>
+                    {previewTemplate.category && (
+                      <span className="ml-2 text-xs font-normal px-2 py-0.5 bg-muted rounded-full">
+                        {previewTemplate.category.name}
+                      </span>
+                    )}
+                  </div>
+                </DialogTitle>
+                <DialogDescription className="mt-2">
+                  {previewTemplate.template_description || 'Preview the board structure.'}
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="mt-4">
+                <div className="flex gap-4 overflow-x-auto pb-4">
+                  {previewTemplate.lists?.map((list) => (
+                    <div
+                      key={list.list_id}
+                      className="flex-shrink-0 w-64 bg-muted rounded-lg p-3"
+                    >
+                      <h4 className="font-semibold text-sm mb-2 text-card-foreground">{list.name}</h4>
+                      <div className="space-y-2">
+                        {list.cards?.slice(0, 3).map((card) => (
+                          <div
+                            key={card.card_id}
+                            className="bg-card rounded-md p-2 shadow-sm"
+                          >
+                            <p className="text-sm font-medium line-clamp-2">{card.title}</p>
+                            {card.labels?.length > 0 && (
+                              <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                                {card.labels.slice(0, 3).map((label, idx) => (
+                                  <span
+                                    key={idx}
+                                    className="w-6 h-1.5 rounded-full"
+                                    style={{ backgroundColor: label.color }}
+                                  />
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                        {list.cards?.length > 3 && (
+                          <p className="text-xs text-muted-foreground text-center">
+                            + {list.cards.length - 3} more cards
+                          </p>
+                        )}
+                        {(!list.cards || list.cards.length === 0) && (
+                          <p className="text-xs text-muted-foreground text-center py-2">Empty list</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  {(!previewTemplate.lists || previewTemplate.lists.length === 0) && (
+                    <p className="text-muted-foreground text-sm">No lists in this template.</p>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-4 mt-4 pt-4 border-t border-border text-sm text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <List className="w-4 h-4" />
+                    {previewTemplate.lists?.length || 0} lists
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Square className="w-4 h-4" />
+                    {previewTemplate.lists?.reduce((acc, l) => acc + (l.cards?.length || 0), 0)} cards
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <User className="w-4 h-4" />
+                    {previewTemplate.creator?.name || 'Unknown'}
+                  </span>
+                </div>
+              </div>
+            </>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
