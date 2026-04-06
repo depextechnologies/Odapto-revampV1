@@ -400,6 +400,19 @@ async def require_privileged(user: User = Depends(get_current_user)) -> User:
         raise HTTPException(status_code=403, detail="Privileged access required")
     return user
 
+async def check_board_access(board, user):
+    """Check if user has access to a board. Admins/creators can also access template boards."""
+    if board.get("is_template"):
+        if user.role == UserRole.ADMIN or board.get("created_by") == user.user_id:
+            return True
+    workspace = await db.workspaces.find_one(
+        {"workspace_id": board["workspace_id"], "members.user_id": user.user_id},
+        {"_id": 0}
+    )
+    if workspace:
+        return True
+    return any(m.get("user_id") == user.user_id for m in board.get("members", []))
+
 # Card Activity Logger Helper
 async def log_card_activity(
     card_id: str,
@@ -1592,11 +1605,7 @@ async def update_board(board_id: str, data: BoardUpdate, user: User = Depends(ge
     if not board:
         raise HTTPException(status_code=404, detail="Board not found")
     
-    workspace = await db.workspaces.find_one(
-        {"workspace_id": board["workspace_id"], "members.user_id": user.user_id},
-        {"_id": 0}
-    )
-    if not workspace:
+    if not await check_board_access(board, user):
         raise HTTPException(status_code=403, detail="Access denied")
     
     update_data = {k: v for k, v in data.model_dump().items() if v is not None}
@@ -1611,11 +1620,7 @@ async def delete_board(board_id: str, user: User = Depends(get_current_user)):
     if not board:
         raise HTTPException(status_code=404, detail="Board not found")
     
-    workspace = await db.workspaces.find_one(
-        {"workspace_id": board["workspace_id"], "members.user_id": user.user_id},
-        {"_id": 0}
-    )
-    if not workspace:
+    if not await check_board_access(board, user):
         raise HTTPException(status_code=403, detail="Access denied")
     
     await db.cards.delete_many({"board_id": board_id})
@@ -1893,11 +1898,7 @@ async def create_list(board_id: str, data: ListCreate, user: User = Depends(get_
     if not board:
         raise HTTPException(status_code=404, detail="Board not found")
     
-    workspace = await db.workspaces.find_one(
-        {"workspace_id": board["workspace_id"], "members.user_id": user.user_id},
-        {"_id": 0}
-    )
-    if not workspace:
+    if not await check_board_access(board, user):
         raise HTTPException(status_code=403, detail="Access denied")
     
     # Get max position
@@ -1932,11 +1933,7 @@ async def update_list(list_id: str, data: ListUpdate, user: User = Depends(get_c
         raise HTTPException(status_code=404, detail="List not found")
     
     board = await db.boards.find_one({"board_id": lst["board_id"]}, {"_id": 0})
-    workspace = await db.workspaces.find_one(
-        {"workspace_id": board["workspace_id"], "members.user_id": user.user_id},
-        {"_id": 0}
-    )
-    if not workspace:
+    if not await check_board_access(board, user):
         raise HTTPException(status_code=403, detail="Access denied")
     
     update_data = {k: v for k, v in data.model_dump().items() if v is not None}
@@ -1959,11 +1956,7 @@ async def delete_list(list_id: str, user: User = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="List not found")
     
     board = await db.boards.find_one({"board_id": lst["board_id"]}, {"_id": 0})
-    workspace = await db.workspaces.find_one(
-        {"workspace_id": board["workspace_id"], "members.user_id": user.user_id},
-        {"_id": 0}
-    )
-    if not workspace:
+    if not await check_board_access(board, user):
         raise HTTPException(status_code=403, detail="Access denied")
     
     await db.cards.delete_many({"list_id": list_id})
@@ -1986,11 +1979,7 @@ async def create_card(list_id: str, data: CardCreate, user: User = Depends(get_c
         raise HTTPException(status_code=404, detail="List not found")
     
     board = await db.boards.find_one({"board_id": lst["board_id"]}, {"_id": 0})
-    workspace = await db.workspaces.find_one(
-        {"workspace_id": board["workspace_id"], "members.user_id": user.user_id},
-        {"_id": 0}
-    )
-    if not workspace:
+    if not await check_board_access(board, user):
         raise HTTPException(status_code=403, detail="Access denied")
     
     # Get max position
@@ -2045,11 +2034,7 @@ async def get_card(card_id: str, user: User = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Card not found")
     
     board = await db.boards.find_one({"board_id": card["board_id"]}, {"_id": 0})
-    workspace = await db.workspaces.find_one(
-        {"workspace_id": board["workspace_id"], "members.user_id": user.user_id},
-        {"_id": 0}
-    )
-    if not workspace:
+    if not await check_board_access(board, user):
         raise HTTPException(status_code=403, detail="Access denied")
     
     return card
@@ -2061,11 +2046,7 @@ async def update_card(card_id: str, data: CardUpdate, user: User = Depends(get_c
         raise HTTPException(status_code=404, detail="Card not found")
     
     board = await db.boards.find_one({"board_id": card["board_id"]}, {"_id": 0})
-    workspace = await db.workspaces.find_one(
-        {"workspace_id": board["workspace_id"], "members.user_id": user.user_id},
-        {"_id": 0}
-    )
-    if not workspace:
+    if not await check_board_access(board, user):
         raise HTTPException(status_code=403, detail="Access denied")
     
     update_data = {}
@@ -2134,11 +2115,7 @@ async def delete_card(card_id: str, user: User = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Card not found")
     
     board = await db.boards.find_one({"board_id": card["board_id"]}, {"_id": 0})
-    workspace = await db.workspaces.find_one(
-        {"workspace_id": board["workspace_id"], "members.user_id": user.user_id},
-        {"_id": 0}
-    )
-    if not workspace:
+    if not await check_board_access(board, user):
         raise HTTPException(status_code=403, detail="Access denied")
     
     # Log activity before deletion
@@ -2173,11 +2150,7 @@ async def move_card(card_id: str, request: Request, user: User = Depends(get_cur
         raise HTTPException(status_code=404, detail="Card not found")
     
     board = await db.boards.find_one({"board_id": card["board_id"]}, {"_id": 0})
-    workspace = await db.workspaces.find_one(
-        {"workspace_id": board["workspace_id"], "members.user_id": user.user_id},
-        {"_id": 0}
-    )
-    if not workspace:
+    if not await check_board_access(board, user):
         raise HTTPException(status_code=403, detail="Access denied")
     
     # Verify target list exists and is in same board
@@ -2237,11 +2210,7 @@ async def get_card_activities(card_id: str, user: User = Depends(get_current_use
         raise HTTPException(status_code=404, detail="Card not found")
     
     board = await db.boards.find_one({"board_id": card["board_id"]}, {"_id": 0})
-    workspace = await db.workspaces.find_one(
-        {"workspace_id": board["workspace_id"], "members.user_id": user.user_id},
-        {"_id": 0}
-    )
-    if not workspace:
+    if not await check_board_access(board, user):
         raise HTTPException(status_code=403, detail="Access denied")
     
     activities = await db.card_activities.find(
@@ -2260,11 +2229,7 @@ async def invite_card_member(card_id: str, data: CardInviteRequest, user: User =
         raise HTTPException(status_code=404, detail="Card not found")
     
     board = await db.boards.find_one({"board_id": card["board_id"]}, {"_id": 0})
-    workspace = await db.workspaces.find_one(
-        {"workspace_id": board["workspace_id"], "members.user_id": user.user_id},
-        {"_id": 0}
-    )
-    if not workspace:
+    if not await check_board_access(board, user):
         raise HTTPException(status_code=403, detail="Access denied")
     
     # Find the user to invite
@@ -2411,11 +2376,7 @@ async def remove_card_member(card_id: str, member_user_id: str, user: User = Dep
         raise HTTPException(status_code=404, detail="Card not found")
     
     board = await db.boards.find_one({"board_id": card["board_id"]}, {"_id": 0})
-    workspace = await db.workspaces.find_one(
-        {"workspace_id": board["workspace_id"], "members.user_id": user.user_id},
-        {"_id": 0}
-    )
-    if not workspace:
+    if not await check_board_access(board, user):
         raise HTTPException(status_code=403, detail="Access denied")
     
     await db.cards.update_one(
@@ -2442,11 +2403,7 @@ async def add_comment(card_id: str, data: CommentCreate, user: User = Depends(ge
         raise HTTPException(status_code=404, detail="Card not found")
     
     board = await db.boards.find_one({"board_id": card["board_id"]}, {"_id": 0})
-    workspace = await db.workspaces.find_one(
-        {"workspace_id": board["workspace_id"], "members.user_id": user.user_id},
-        {"_id": 0}
-    )
-    if not workspace:
+    if not await check_board_access(board, user):
         raise HTTPException(status_code=403, detail="Access denied")
     
     comment = {
@@ -2502,11 +2459,7 @@ async def add_checklist_item(card_id: str, data: ChecklistItemCreate, user: User
         raise HTTPException(status_code=404, detail="Card not found")
     
     board = await db.boards.find_one({"board_id": card["board_id"]}, {"_id": 0})
-    workspace = await db.workspaces.find_one(
-        {"workspace_id": board["workspace_id"], "members.user_id": user.user_id},
-        {"_id": 0}
-    )
-    if not workspace:
+    if not await check_board_access(board, user):
         raise HTTPException(status_code=403, detail="Access denied")
     
     item = {
@@ -2545,11 +2498,7 @@ async def toggle_checklist_item(card_id: str, item_id: str, user: User = Depends
         raise HTTPException(status_code=404, detail="Card not found")
     
     board = await db.boards.find_one({"board_id": card["board_id"]}, {"_id": 0})
-    workspace = await db.workspaces.find_one(
-        {"workspace_id": board["workspace_id"], "members.user_id": user.user_id},
-        {"_id": 0}
-    )
-    if not workspace:
+    if not await check_board_access(board, user):
         raise HTTPException(status_code=403, detail="Access denied")
     
     # Find and toggle the item
@@ -2881,11 +2830,7 @@ async def upload_board_background(board_id: str, file: UploadFile = File(...), u
     if not board:
         raise HTTPException(status_code=404, detail="Board not found")
     
-    workspace = await db.workspaces.find_one(
-        {"workspace_id": board["workspace_id"], "members.user_id": user.user_id},
-        {"_id": 0}
-    )
-    if not workspace:
+    if not await check_board_access(board, user):
         raise HTTPException(status_code=403, detail="Access denied")
     
     # Validate file type
@@ -2919,11 +2864,7 @@ async def upload_attachment(card_id: str, file: UploadFile = File(...), user: Us
         raise HTTPException(status_code=404, detail="Card not found")
     
     board = await db.boards.find_one({"board_id": card["board_id"]}, {"_id": 0})
-    workspace = await db.workspaces.find_one(
-        {"workspace_id": board["workspace_id"], "members.user_id": user.user_id},
-        {"_id": 0}
-    )
-    if not workspace:
+    if not await check_board_access(board, user):
         raise HTTPException(status_code=403, detail="Access denied")
     
     # Save file
@@ -2956,11 +2897,7 @@ async def delete_attachment(card_id: str, file_id: str, user: User = Depends(get
         raise HTTPException(status_code=404, detail="Card not found")
     
     board = await db.boards.find_one({"board_id": card["board_id"]}, {"_id": 0})
-    workspace = await db.workspaces.find_one(
-        {"workspace_id": board["workspace_id"], "members.user_id": user.user_id},
-        {"_id": 0}
-    )
-    if not workspace:
+    if not await check_board_access(board, user):
         raise HTTPException(status_code=403, detail="Access denied")
     
     # Find the attachment
@@ -3001,11 +2938,7 @@ async def set_card_cover(card_id: str, request: Request, user: User = Depends(ge
         raise HTTPException(status_code=404, detail="Card not found")
     
     board = await db.boards.find_one({"board_id": card["board_id"]}, {"_id": 0})
-    workspace = await db.workspaces.find_one(
-        {"workspace_id": board["workspace_id"], "members.user_id": user.user_id},
-        {"_id": 0}
-    )
-    if not workspace:
+    if not await check_board_access(board, user):
         raise HTTPException(status_code=403, detail="Access denied")
     
     await db.cards.update_one(
@@ -3032,11 +2965,7 @@ async def delete_checklist_item(card_id: str, item_id: str, user: User = Depends
         raise HTTPException(status_code=404, detail="Card not found")
     
     board = await db.boards.find_one({"board_id": card["board_id"]}, {"_id": 0})
-    workspace = await db.workspaces.find_one(
-        {"workspace_id": board["workspace_id"], "members.user_id": user.user_id},
-        {"_id": 0}
-    )
-    if not workspace:
+    if not await check_board_access(board, user):
         raise HTTPException(status_code=403, detail="Access denied")
     
     item = next((i for i in card.get("checklist", []) if i["item_id"] == item_id), None)
@@ -3066,11 +2995,7 @@ async def duplicate_card(card_id: str, user: User = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Card not found")
     
     board = await db.boards.find_one({"board_id": card["board_id"]}, {"_id": 0})
-    workspace = await db.workspaces.find_one(
-        {"workspace_id": board["workspace_id"], "members.user_id": user.user_id},
-        {"_id": 0}
-    )
-    if not workspace:
+    if not await check_board_access(board, user):
         raise HTTPException(status_code=403, detail="Access denied")
     
     new_card_id = f"card_{uuid.uuid4().hex[:12]}"

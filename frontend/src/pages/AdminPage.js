@@ -589,6 +589,7 @@ export default function AdminPage() {
                                 className="h-8 w-8"
                                 onClick={() => handlePreviewTemplate(template)}
                                 data-testid={`admin-preview-template-${template.board_id}`}
+                                title="Preview"
                               >
                                 <Eye className="w-4 h-4" />
                               </Button>
@@ -596,8 +597,19 @@ export default function AdminPage() {
                                 variant="ghost"
                                 size="icon"
                                 className="h-8 w-8"
+                                onClick={() => navigate(`/board/${template.board_id}`)}
+                                data-testid={`admin-edit-board-template-${template.board_id}`}
+                                title="Edit board (lists, cards, etc.)"
+                              >
+                                <LayoutTemplate className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
                                 onClick={() => handleEditTemplate(template)}
                                 data-testid={`admin-edit-template-${template.board_id}`}
+                                title="Edit name &amp; category"
                               >
                                 <Pencil className="w-4 h-4" />
                               </Button>
@@ -607,6 +619,7 @@ export default function AdminPage() {
                                 className="h-8 w-8 text-destructive hover:text-destructive"
                                 onClick={() => handleDeleteTemplate(template)}
                                 data-testid={`admin-delete-template-${template.board_id}`}
+                                title="Delete template"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </Button>
