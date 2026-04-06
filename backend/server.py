@@ -623,9 +623,15 @@ async def google_login(request: Request):
         logger.error("[GOOGLE_OAUTH] GOOGLE_CLIENT_ID not set")
         raise HTTPException(status_code=500, detail="Google OAuth not configured")
     
-    frontend_url = os.environ.get("FRONTEND_URL", str(request.base_url).rstrip("/"))
-    redirect_uri = f"{frontend_url}/auth/google/callback"
-    logger.info(f"[GOOGLE_OAUTH] Init: redirect_uri={redirect_uri}, frontend_url={frontend_url}")
+    # Allow mobile to pass redirect_uri, otherwise construct from frontend URL
+    mobile_redirect = request.query_params.get("redirect_uri")
+    if mobile_redirect:
+        redirect_uri = mobile_redirect
+    else:
+        frontend_url = os.environ.get("FRONTEND_URL", str(request.base_url).rstrip("/"))
+        redirect_uri = f"{frontend_url}/auth/google/callback"
+    
+    logger.info(f"[GOOGLE_OAUTH] Init: redirect_uri={redirect_uri}, mobile={bool(mobile_redirect)}")
     
     params = {
         "client_id": client_id,
@@ -1612,6 +1618,13 @@ async def update_board(board_id: str, data: BoardUpdate, user: User = Depends(ge
     if update_data:
         await db.boards.update_one({"board_id": board_id}, {"$set": update_data})
     
+    # Broadcast board updated for real-time sync
+    await manager.broadcast(board_id, {
+        "type": "board_updated",
+        "board_id": board_id,
+        "updates": update_data
+    })
+    
     return {"message": "Board updated"}
 
 @api_router.delete("/boards/{board_id}")
@@ -2384,6 +2397,13 @@ async def remove_card_member(card_id: str, member_user_id: str, user: User = Dep
         {"$pull": {"assigned_members": {"user_id": member_user_id}}}
     )
     
+    # Broadcast member removed for real-time sync
+    await manager.broadcast(board["board_id"], {
+        "type": "member_removed",
+        "card_id": card_id,
+        "member_user_id": member_user_id
+    })
+    
     return {"message": "Member removed from card"}
 
 @api_router.get("/cards/{card_id}/members")
@@ -2888,6 +2908,18 @@ async def upload_attachment(card_id: str, file: UploadFile = File(...), user: Us
         {"$push": {"attachments": attachment}}
     )
     
+    # Broadcast attachment added for real-time sync
+    await manager.broadcast(board["board_id"], {
+        "type": "attachment_added",
+        "card_id": card_id,
+        "attachment": attachment
+    })
+    
+    await log_card_activity(
+        card_id=card_id, board_id=board["board_id"], user=user,
+        action="added_attachment", details={"filename": file.filename}
+    )
+    
     return attachment
 
 @api_router.delete("/cards/{card_id}/attachments/{file_id}")
@@ -2925,6 +2957,13 @@ async def delete_attachment(card_id: str, file_id: str, user: User = Depends(get
         card_id=card_id, board_id=board["board_id"], user=user,
         action="deleted_attachment", details={"filename": attachment["filename"]}
     )
+    
+    # Broadcast attachment deleted for real-time sync
+    await manager.broadcast(board["board_id"], {
+        "type": "attachment_deleted",
+        "card_id": card_id,
+        "file_id": file_id
+    })
     
     return {"message": "Attachment deleted"}
 

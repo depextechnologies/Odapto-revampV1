@@ -305,6 +305,7 @@ export default function BoardPage() {
               
             case 'checklist_item_added':
             case 'checklist_item_toggled':
+            case 'checklist_item_deleted':
               // Refresh the selected card if it's the affected one
               if (data.card_id) {
                 apiGet(`/cards/${data.card_id}`).then(res => {
@@ -325,6 +326,65 @@ export default function BoardPage() {
                   }
                 });
               }
+              break;
+
+            case 'attachment_added':
+            case 'attachment_deleted':
+              // Refresh the card to get updated attachments
+              if (data.card_id) {
+                apiGet(`/cards/${data.card_id}`).then(res => {
+                  if (res.ok) {
+                    res.json().then(card => {
+                      setSelectedCard(prev => prev?.card_id === card.card_id ? card : prev);
+                      setBoard(prev => {
+                        if (!prev) return prev;
+                        return {
+                          ...prev,
+                          lists: prev.lists.map(l => ({
+                            ...l,
+                            cards: l.cards.map(c => c.card_id === card.card_id ? card : c)
+                          }))
+                        };
+                      });
+                    });
+                  }
+                });
+              }
+              break;
+
+            case 'member_removed':
+              // Refresh card members when a member is removed
+              if (data.card_id) {
+                apiGet(`/cards/${data.card_id}`).then(res => {
+                  if (res.ok) {
+                    res.json().then(card => {
+                      setSelectedCard(prev => prev?.card_id === card.card_id ? card : prev);
+                      setBoard(prev => {
+                        if (!prev) return prev;
+                        return {
+                          ...prev,
+                          lists: prev.lists.map(l => ({
+                            ...l,
+                            cards: l.cards.map(c => c.card_id === card.card_id ? card : c)
+                          }))
+                        };
+                      });
+                    });
+                  }
+                });
+              }
+              break;
+
+            case 'board_updated':
+              // Update board-level properties (name, background, etc.)
+              setBoard(prev => {
+                if (!prev) return prev;
+                return { ...prev, ...data.updates };
+              });
+              break;
+
+            case 'card_activity':
+              // No-op — activity log handled by card refresh
               break;
               
             default:

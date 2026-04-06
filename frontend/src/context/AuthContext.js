@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import { API } from '../config';
+import { API, API_BASE_URL } from '../config';
+import { Capacitor } from '@capacitor/core';
+import { Browser } from '@capacitor/browser';
 
 const AuthContext = createContext(null);
 
@@ -131,8 +133,16 @@ export const AuthProvider = ({ children }) => {
     return data;
   };
 
-  const loginWithGoogle = () => {
-    window.location.href = `${API}/auth/google`;
+  const loginWithGoogle = async () => {
+    if (Capacitor.isNativePlatform()) {
+      // Mobile: open OAuth in in-app browser with production redirect URI
+      const redirectUri = encodeURIComponent(`${API_BASE_URL}/auth/google/callback`);
+      const oauthUrl = `${API}/auth/google?mobile=true&redirect_uri=${redirectUri}`;
+      await Browser.open({ url: oauthUrl, presentationStyle: 'popover' });
+    } else {
+      // Web: standard redirect flow
+      window.location.href = `${API}/auth/google`;
+    }
   };
 
   const processGoogleCallback = async (code) => {

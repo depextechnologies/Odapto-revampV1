@@ -1,6 +1,8 @@
 import React, { useRef, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Capacitor } from '@capacitor/core';
+import { App as CapApp } from '@capacitor/app';
+import { Browser } from '@capacitor/browser';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { Toaster } from './components/ui/sonner';
@@ -38,6 +40,10 @@ const GoogleAuthCallback = () => {
     const code = params.get('code');
 
     if (code) {
+      // Close in-app browser on mobile
+      if (Capacitor.isNativePlatform()) {
+        Browser.close().catch(() => {});
+      }
       processGoogleCallback(code)
         .then(() => {
           navigate('/dashboard', { replace: true });
@@ -183,6 +189,23 @@ const AppRouter = () => {
 };
 
 function App() {
+  useEffect(() => {
+    // Mobile: Listen for deep link callbacks (Google OAuth redirect)
+    if (Capacitor.isNativePlatform()) {
+      CapApp.addListener('appUrlOpen', (event) => {
+        const url = new URL(event.url);
+        if (url.pathname === '/auth/google/callback') {
+          const code = url.searchParams.get('code');
+          if (code) {
+            Browser.close().catch(() => {});
+            // Navigate to callback route with code — handled by GoogleAuthCallback
+            window.location.href = `/auth/google/callback?code=${encodeURIComponent(code)}`;
+          }
+        }
+      });
+    }
+  }, []);
+
   return (
     <ThemeProvider>
       <AuthProvider>

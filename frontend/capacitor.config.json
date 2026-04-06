@@ -25,9 +25,11 @@
     }
   },
   "android": {
-    "allowMixedContent": true
+    "allowMixedContent": true,
+    "appendUserAgent": "Odapto-Android"
   },
   "ios": {
-    "contentInset": "automatic"
+    "contentInset": "automatic",
+    "appendUserAgent": "Odapto-iOS"
   }
 }
