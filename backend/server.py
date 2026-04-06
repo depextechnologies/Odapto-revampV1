@@ -3245,6 +3245,271 @@ async def websocket_endpoint(websocket: WebSocket, board_id: str):
     except WebSocketDisconnect:
         manager.disconnect(websocket, board_id)
 
+# ============== INTEGRATIONS ==============
+
+GOOGLE_DRIVE_SCOPES = "https://www.googleapis.com/auth/drive.readonly"
+
+@api_router.get("/integrations/status")
+async def get_integration_status(user: User = Depends(get_current_user)):
+    """Get connection status for all integrations"""
+    gdrive = await db.integrations.find_one(
+        {"user_id": user.user_id, "provider": "google_drive"}, {"_id": 0}
+    )
+    return {
+        "google_drive": {
+            "connected": bool(gdrive and gdrive.get("refresh_token")),
+            "email": gdrive.get("email") if gdrive else None,
+            "connected_at": gdrive.get("connected_at") if gdrive else None
+        },
+        "onedrive": {"connected": False},
+        "dropbox": {"connected": False}
+    }
+
+@api_router.get("/integrations/google-drive/connect")
+async def gdrive_connect(request: Request, token: str = None):
+    """Initiate Google Drive OAuth — redirects to Google with drive scope.
+    Accepts session token via query param since browser redirect doesn't include headers."""
+    # Get user from query param token or Authorization header
+    session_token = token
+    if not session_token:
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            session_token = auth_header.split(" ")[1]
+    
+    if not session_token:
+        raise HTTPException(status_code=401, detail="Not authenticated - token required")
+    
+    session = await db.user_sessions.find_one({"session_token": session_token}, {"_id": 0})
+    if not session:
+        raise HTTPException(status_code=401, detail="Invalid session")
+    
+    # Check expiry
+    expires_at = session["expires_at"]
+    if isinstance(expires_at, str):
+        expires_at = datetime.fromisoformat(expires_at)
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=401, detail="Session expired")
+    
+    user_id = session["user_id"]
+    
+    client_id = os.environ.get("GOOGLE_CLIENT_ID")
+    if not client_id:
+        raise HTTPException(status_code=500, detail="Google OAuth not configured")
+
+    frontend_url = os.environ.get("FRONTEND_URL", str(request.base_url).rstrip("/"))
+    redirect_uri = f"{frontend_url}/api/integrations/google-drive/callback"
+
+    state = secrets.token_urlsafe(32)
+    await db.oauth_states.insert_one({
+        "state": state,
+        "user_id": user_id,
+        "created_at": datetime.now(timezone.utc)
+    })
+
+    params = {
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": f"openid email {GOOGLE_DRIVE_SCOPES}",
+        "access_type": "offline",
+        "prompt": "consent",
+        "state": state
+    }
+    google_url = f"{GOOGLE_AUTH_URL}?{urlencode(params)}"
+    return RedirectResponse(url=google_url)
+
+@api_router.get("/integrations/google-drive/callback")
+async def gdrive_callback(request: Request, code: str = None, state: str = None, error: str = None):
+    """Handle Google Drive OAuth callback"""
+    frontend_url = os.environ.get("FRONTEND_URL", str(request.base_url).rstrip("/"))
+
+    if error:
+        return RedirectResponse(url=f"{frontend_url}/integrations?error={error}")
+
+    if not code or not state:
+        return RedirectResponse(url=f"{frontend_url}/integrations?error=missing_params")
+
+    oauth_state = await db.oauth_states.find_one({"state": state})
+    if not oauth_state:
+        return RedirectResponse(url=f"{frontend_url}/integrations?error=invalid_state")
+
+    user_id = oauth_state["user_id"]
+    await db.oauth_states.delete_one({"state": state})
+
+    client_id = os.environ.get("GOOGLE_CLIENT_ID")
+    client_secret = os.environ.get("GOOGLE_CLIENT_SECRET")
+    redirect_uri = f"{frontend_url}/api/integrations/google-drive/callback"
+
+    try:
+        async with httpx.AsyncClient() as http_client:
+            token_resp = await http_client.post(GOOGLE_TOKEN_URL, data={
+                "code": code,
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "redirect_uri": redirect_uri,
+                "grant_type": "authorization_code"
+            })
+
+            if token_resp.status_code != 200:
+                logger.error(f"[GDRIVE] Token exchange failed: {token_resp.text}")
+                return RedirectResponse(url=f"{frontend_url}/integrations?error=token_exchange_failed")
+
+            tokens = token_resp.json()
+            access_token = tokens.get("access_token")
+            refresh_token = tokens.get("refresh_token")
+
+            user_resp = await http_client.get(GOOGLE_USERINFO_URL, headers={
+                "Authorization": f"Bearer {access_token}"
+            })
+            gdrive_email = ""
+            if user_resp.status_code == 200:
+                gdrive_email = user_resp.json().get("email", "")
+
+        await db.integrations.update_one(
+            {"user_id": user_id, "provider": "google_drive"},
+            {"$set": {
+                "user_id": user_id,
+                "provider": "google_drive",
+                "access_token": access_token,
+                "refresh_token": refresh_token or "",
+                "email": gdrive_email,
+                "connected_at": datetime.now(timezone.utc).isoformat()
+            }},
+            upsert=True
+        )
+
+        return RedirectResponse(url=f"{frontend_url}/integrations?connected=google_drive")
+
+    except Exception as e:
+        logger.error(f"[GDRIVE] Callback error: {e}")
+        return RedirectResponse(url=f"{frontend_url}/integrations?error=server_error")
+
+async def get_gdrive_access_token(user_id: str):
+    """Get a valid Google Drive access token, refreshing if needed"""
+    integration = await db.integrations.find_one(
+        {"user_id": user_id, "provider": "google_drive"}, {"_id": 0}
+    )
+    if not integration or not integration.get("refresh_token"):
+        return None
+
+    client_id = os.environ.get("GOOGLE_CLIENT_ID")
+    client_secret = os.environ.get("GOOGLE_CLIENT_SECRET")
+
+    async with httpx.AsyncClient() as http_client:
+        resp = await http_client.post(GOOGLE_TOKEN_URL, data={
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "refresh_token": integration["refresh_token"],
+            "grant_type": "refresh_token"
+        })
+        if resp.status_code != 200:
+            return None
+        new_token = resp.json().get("access_token")
+        await db.integrations.update_one(
+            {"user_id": user_id, "provider": "google_drive"},
+            {"$set": {"access_token": new_token}}
+        )
+        return new_token
+
+@api_router.get("/integrations/google-drive/files")
+async def gdrive_list_files(
+    user: User = Depends(get_current_user),
+    folder_id: str = None,
+    search: str = None,
+    page_token: str = None
+):
+    """Browse Google Drive files"""
+    access_token = await get_gdrive_access_token(user.user_id)
+    if not access_token:
+        raise HTTPException(status_code=401, detail="Google Drive not connected")
+
+    query_parts = ["trashed=false"]
+    if folder_id:
+        query_parts.append(f"'{folder_id}' in parents")
+    else:
+        query_parts.append("'root' in parents")
+    if search:
+        query_parts.append(f"name contains '{search}'")
+
+    params = {
+        "q": " and ".join(query_parts),
+        "fields": "nextPageToken,files(id,name,mimeType,size,iconLink,webViewLink,thumbnailLink,modifiedTime,parents)",
+        "pageSize": 50,
+        "orderBy": "folder,name"
+    }
+    if page_token:
+        params["pageToken"] = page_token
+
+    async with httpx.AsyncClient() as http_client:
+        resp = await http_client.get(
+            "https://www.googleapis.com/drive/v3/files",
+            headers={"Authorization": f"Bearer {access_token}"},
+            params=params
+        )
+        if resp.status_code == 401:
+            raise HTTPException(status_code=401, detail="Google Drive token expired. Please reconnect.")
+        if resp.status_code != 200:
+            raise HTTPException(status_code=502, detail="Failed to fetch Drive files")
+        return resp.json()
+
+@api_router.post("/integrations/google-drive/attach")
+async def gdrive_attach_file(request: Request, user: User = Depends(get_current_user)):
+    """Attach a Google Drive file to a card as a link"""
+    body = await request.json()
+    card_id = body.get("card_id")
+    file_id = body.get("file_id")
+    file_name = body.get("file_name")
+    file_url = body.get("file_url")
+    file_icon = body.get("file_icon")
+    file_mime = body.get("file_mime")
+
+    if not card_id or not file_id:
+        raise HTTPException(status_code=400, detail="card_id and file_id required")
+
+    card = await db.cards.find_one({"card_id": card_id}, {"_id": 0})
+    if not card:
+        raise HTTPException(status_code=404, detail="Card not found")
+
+    board = await db.boards.find_one({"board_id": card["board_id"]}, {"_id": 0})
+    if not await check_board_access(board, user):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    attachment = {
+        "file_id": f"gdrive_{file_id}",
+        "filename": file_name or "Drive file",
+        "url": file_url or f"https://drive.google.com/file/d/{file_id}/view",
+        "icon": file_icon,
+        "mime_type": file_mime,
+        "source": "google_drive",
+        "uploaded_at": datetime.now(timezone.utc).isoformat()
+    }
+
+    await db.cards.update_one(
+        {"card_id": card_id},
+        {"$push": {"attachments": attachment}}
+    )
+
+    await manager.broadcast(board["board_id"], {
+        "type": "attachment_added",
+        "card_id": card_id,
+        "attachment": attachment
+    })
+
+    await log_card_activity(
+        card_id=card_id, board_id=board["board_id"], user=user,
+        action="added_attachment", details={"filename": file_name, "source": "google_drive"}
+    )
+
+    return attachment
+
+@api_router.delete("/integrations/google-drive/disconnect")
+async def gdrive_disconnect(user: User = Depends(get_current_user)):
+    """Disconnect Google Drive"""
+    await db.integrations.delete_one({"user_id": user.user_id, "provider": "google_drive"})
+    return {"message": "Google Drive disconnected"}
+
 # ============== HEALTH CHECK ==============
 
 @api_router.get("/health")

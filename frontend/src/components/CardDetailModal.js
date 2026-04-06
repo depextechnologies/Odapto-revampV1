@@ -11,6 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar';
 import { toast } from 'sonner';
 import { format, isToday, isPast, isFuture, formatDistanceToNow } from 'date-fns';
 import { apiPatch, apiPost, apiDelete, apiCall, apiGet } from '../utils/api';
+import DriveFilePicker from './DriveFilePicker';
 import { 
   Calendar as CalendarIcon, 
   Tag, 
@@ -34,7 +35,8 @@ import {
   FileText,
   File as FileIcon,
   Image as ImageIcon,
-  Copy
+  Copy,
+  HardDrive
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 
@@ -163,6 +165,7 @@ export const CardDetailModal = ({ card, onClose, onUpdate, onDelete }) => {
   
   // Attachment upload
   const [uploading, setUploading] = useState(false);
+  const [drivePickerOpen, setDrivePickerOpen] = useState(false);
   
   // Activity history
   const [activities, setActivities] = useState([]);
@@ -457,6 +460,7 @@ export const CardDetailModal = ({ card, onClose, onUpdate, onDelete }) => {
   };
 
   return (
+    <>
     <Dialog open={true} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -639,13 +643,14 @@ export const CardDetailModal = ({ card, onClose, onUpdate, onDelete }) => {
                 {attachments.map((att, idx) => {
                   const isImage = att.filename?.match(/\.(jpg|jpeg|png|gif|webp)$/i);
                   const isPdf = att.filename?.match(/\.pdf$/i);
+                  const isDriveFile = att.source === 'google_drive';
                   const fileUrl = att.url?.startsWith('http') ? att.url : `${API_BASE}${att.url}`;
                   
                   return (
                     <div key={idx} className="group border border-border rounded-lg overflow-hidden hover:border-odapto-orange/50 transition-colors">
                       {/* Preview Area */}
                       <div className="relative">
-                        {isImage ? (
+                        {isImage && !isDriveFile ? (
                           <div className="h-32 bg-muted flex items-center justify-center overflow-hidden">
                             <img 
                               src={fileUrl} 
@@ -656,13 +661,15 @@ export const CardDetailModal = ({ card, onClose, onUpdate, onDelete }) => {
                         ) : (
                           <div className="h-20 bg-muted flex items-center justify-center">
                             <div className="text-center">
-                              {isPdf ? (
+                              {isDriveFile ? (
+                                <img src="https://upload.wikimedia.org/wikipedia/commons/1/12/Google_Drive_icon_%282020%29.svg" alt="Drive" className="w-8 h-8 mx-auto mb-1" />
+                              ) : isPdf ? (
                                 <FileText className="w-8 h-8 mx-auto text-red-500 mb-1" />
                               ) : (
                                 <FileIcon className="w-8 h-8 mx-auto text-muted-foreground mb-1" />
                               )}
                               <span className="text-xs text-muted-foreground uppercase">
-                                {att.filename?.split('.').pop()}
+                                {isDriveFile ? 'Google Drive' : att.filename?.split('.').pop()}
                               </span>
                             </div>
                           </div>
@@ -732,6 +739,16 @@ export const CardDetailModal = ({ card, onClose, onUpdate, onDelete }) => {
                 >
                   <Upload className="w-4 h-4 mr-2" />
                   {uploading ? 'Uploading...' : 'Add Attachment'}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setDrivePickerOpen(true)}
+                  className="w-full"
+                  data-testid="attach-from-drive-btn"
+                >
+                  <HardDrive className="w-4 h-4 mr-2" />
+                  Attach from Google Drive
                 </Button>
               </div>
             </div>
@@ -975,6 +992,18 @@ export const CardDetailModal = ({ card, onClose, onUpdate, onDelete }) => {
         </div>
       </DialogContent>
     </Dialog>
+
+    <DriveFilePicker
+      open={drivePickerOpen}
+      onClose={() => setDrivePickerOpen(false)}
+      cardId={card.card_id}
+      onAttached={(attachment) => {
+        const updated = [...attachments, attachment];
+        setAttachments(updated);
+        onUpdate({ ...card, attachments: updated });
+      }}
+    />
+    </>
   );
 };
 
