@@ -76,12 +76,12 @@ Odapto is a production-grade Kanban-based work management SaaS similar to Trello
 - [x] Remember User Login (web: localStorage vs sessionStorage, checkbox on login) - Feb 2026
 - [x] Admin Panel Template Management tab (clickable stat cards, category drill-down, table with edit/delete/preview) - Apr 2026
 - [x] Admin Template Board Editing (full Kanban editor for templates — add/edit/delete lists, cards, attachments via check_board_access helper) - Apr 2026
-- [ ] Gmail Auth Flow (mobile return to app after Google OAuth)
+- [x] Gmail Auth Flow (mobile return to app after Google OAuth via Capacitor Browser plugin + deep linking) - Apr 2026
 
-### P1 - High Effort Items from Bug List
+### P1 (Completed) - High Effort Items from Bug List
+- [x] Real-time Collaboration: WebSocket broadcast for comments, file uploads, member additions, card moves, attachments, board updates (18 event types) - Apr 2026
 - [ ] Cloud Storage: Google Drive integration for attachments
 - [ ] Integrations Page: make functional with connect/disconnect
-- [ ] Real-time Collaboration: WebSocket broadcast for comments, file uploads, member additions, card moves
 
 ### P2 - Future
 - [ ] Cloud Storage: Dropbox, OneDrive (user will provide OAuth keys)
