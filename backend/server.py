@@ -3719,11 +3719,18 @@ async def dropbox_list_files(
                 headers=headers,
                 json={"path": folder_path, "limit": 50, "include_media_info": True}
             )
+            logger.info(f"[DROPBOX] list_folder path='{folder_path}' status={resp.status_code}")
             if resp.status_code == 401:
                 raise HTTPException(status_code=401, detail="Dropbox token expired. Please reconnect.")
             if resp.status_code != 200:
-                raise HTTPException(status_code=502, detail="Failed to fetch Dropbox files")
+                logger.error(f"[DROPBOX] list_folder error: {resp.text}")
+                error_data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
+                error_summary = error_data.get("error_summary", "")
+                if "not_found" in error_summary or "not_folder" in error_summary:
+                    return {"files": [], "has_more": False, "error": "Folder not found"}
+                raise HTTPException(status_code=502, detail=f"Failed to fetch Dropbox files: {error_summary}")
             data = resp.json()
+            logger.info(f"[DROPBOX] list_folder returned {len(data.get('entries', []))} entries")
             files = [_format_dropbox_entry(e) for e in data.get("entries", [])]
             return {"files": files, "has_more": data.get("has_more", False), "cursor": data.get("cursor")}
 
