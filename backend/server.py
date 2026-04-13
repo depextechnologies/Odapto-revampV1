@@ -1,5 +1,5 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, WebSocket, WebSocketDisconnect, UploadFile, File, Request, Response
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse, Response
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -42,6 +42,57 @@ logging.info(f"MongoDB database selected: {db.name}")
 # File storage directory
 UPLOAD_DIR = ROOT_DIR / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
+
+# ============== OBJECT STORAGE ==============
+import requests as sync_requests
+
+STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
+EMERGENT_KEY = os.environ.get("EMERGENT_LLM_KEY")
+APP_NAME = "odapto"
+_storage_key = None
+
+def init_storage():
+    """Initialize Emergent Object Storage — call once at startup."""
+    global _storage_key
+    if _storage_key:
+        return _storage_key
+    if not EMERGENT_KEY:
+        logger.warning("[STORAGE] EMERGENT_LLM_KEY not set, object storage disabled")
+        return None
+    try:
+        resp = sync_requests.post(f"{STORAGE_URL}/init", json={"emergent_key": EMERGENT_KEY}, timeout=30)
+        resp.raise_for_status()
+        _storage_key = resp.json()["storage_key"]
+        logger.info("[STORAGE] Object storage initialized successfully")
+        return _storage_key
+    except Exception as e:
+        logger.error(f"[STORAGE] Init failed: {e}")
+        return None
+
+def put_object(path: str, data: bytes, content_type: str) -> dict:
+    """Upload file to object storage."""
+    key = init_storage()
+    if not key:
+        raise Exception("Object storage not available")
+    resp = sync_requests.put(
+        f"{STORAGE_URL}/objects/{path}",
+        headers={"X-Storage-Key": key, "Content-Type": content_type},
+        data=data, timeout=120
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+def get_object(path: str):
+    """Download file from object storage."""
+    key = init_storage()
+    if not key:
+        raise Exception("Object storage not available")
+    resp = sync_requests.get(
+        f"{STORAGE_URL}/objects/{path}",
+        headers={"X-Storage-Key": key}, timeout=60
+    )
+    resp.raise_for_status()
+    return resp.content, resp.headers.get("Content-Type", "application/octet-stream")
 
 # Create the main app
 app = FastAPI(title="Odapto API", version="1.0.0")
@@ -2890,16 +2941,24 @@ async def upload_attachment(card_id: str, file: UploadFile = File(...), user: Us
     # Save file
     file_id = f"file_{uuid.uuid4().hex[:12]}"
     file_ext = Path(file.filename).suffix
-    file_path = UPLOAD_DIR / f"{file_id}{file_ext}"
+    content = await file.read()
     
-    with open(file_path, "wb") as f:
-        content = await file.read()
-        f.write(content)
+    # Try object storage first, fallback to local disk
+    storage_path = f"attachments/{file_id}{file_ext}"
+    try:
+        result = put_object(storage_path, content, file.content_type or "application/octet-stream")
+        file_url = result.get("public_url") or f"/api/storage/{storage_path}"
+    except Exception as e:
+        logger.warning(f"[STORAGE] Object storage failed, saving locally: {e}")
+        file_path = UPLOAD_DIR / f"{file_id}{file_ext}"
+        with open(file_path, "wb") as f:
+            f.write(content)
+        file_url = f"/api/files/{file_id}{file_ext}"
     
     attachment = {
         "file_id": file_id,
         "filename": file.filename,
-        "url": f"/api/files/{file_id}{file_ext}",
+        "url": file_url,
         "uploaded_at": datetime.now(timezone.utc).isoformat()
     }
     
@@ -3080,6 +3139,16 @@ async def get_file(filename: str):
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(file_path)
+
+@api_router.get("/storage/{path:path}")
+async def get_storage_file(path: str):
+    """Serve file from Emergent Object Storage"""
+    try:
+        content, content_type = get_object(path)
+        return Response(content=content, media_type=content_type)
+    except Exception as e:
+        logger.error(f"[STORAGE] Failed to serve {path}: {e}")
+        raise HTTPException(status_code=404, detail="File not found")
 
 # ============== SEARCH ==============
 
@@ -3463,14 +3532,12 @@ async def gdrive_list_files(
 
 @api_router.post("/integrations/google-drive/attach")
 async def gdrive_attach_file(request: Request, user: User = Depends(get_current_user)):
-    """Attach a Google Drive file to a card as a link"""
+    """Download a Google Drive file and store it in Odapto"""
     body = await request.json()
     card_id = body.get("card_id")
     file_id = body.get("file_id")
     file_name = body.get("file_name")
-    file_url = body.get("file_url")
-    file_icon = body.get("file_icon")
-    file_mime = body.get("file_mime")
+    file_mime = body.get("file_mime", "application/octet-stream")
 
     if not card_id or not file_id:
         raise HTTPException(status_code=400, detail="card_id and file_id required")
@@ -3483,13 +3550,69 @@ async def gdrive_attach_file(request: Request, user: User = Depends(get_current_
     if not await check_board_access(board, user):
         raise HTTPException(status_code=403, detail="Access denied")
 
+    access_token = await get_gdrive_access_token(user.user_id)
+    if not access_token:
+        raise HTTPException(status_code=401, detail="Google Drive not connected")
+
+    # Download file from Google Drive
+    try:
+        async with httpx.AsyncClient(timeout=120) as http_client:
+            # For Google Docs/Sheets/Slides, export as PDF
+            is_google_doc = file_mime and file_mime.startswith("application/vnd.google-apps.")
+            if is_google_doc:
+                export_map = {
+                    "application/vnd.google-apps.document": "application/pdf",
+                    "application/vnd.google-apps.spreadsheet": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    "application/vnd.google-apps.presentation": "application/pdf",
+                }
+                export_mime = export_map.get(file_mime, "application/pdf")
+                dl_resp = await http_client.get(
+                    f"https://www.googleapis.com/drive/v3/files/{file_id}/export",
+                    headers={"Authorization": f"Bearer {access_token}"},
+                    params={"mimeType": export_mime}
+                )
+                file_mime = export_mime
+                if file_name and not file_name.endswith(".pdf"):
+                    file_name = f"{file_name}.pdf"
+            else:
+                dl_resp = await http_client.get(
+                    f"https://www.googleapis.com/drive/v3/files/{file_id}",
+                    headers={"Authorization": f"Bearer {access_token}"},
+                    params={"alt": "media"}
+                )
+
+            if dl_resp.status_code != 200:
+                logger.error(f"[GDRIVE] Download failed: {dl_resp.status_code} {dl_resp.text[:200]}")
+                raise HTTPException(status_code=502, detail="Failed to download file from Google Drive")
+
+            file_content = dl_resp.content
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[GDRIVE] Download error: {e}")
+        raise HTTPException(status_code=502, detail="Failed to download file from Google Drive")
+
+    # Store file
+    local_file_id = f"file_{uuid.uuid4().hex[:12]}"
+    ext = Path(file_name).suffix if file_name else ""
+    storage_path = f"attachments/{local_file_id}{ext}"
+
+    try:
+        result = put_object(storage_path, file_content, file_mime)
+        file_url = result.get("public_url") or f"/api/storage/{storage_path}"
+    except Exception as e:
+        logger.warning(f"[STORAGE] Object storage failed, saving locally: {e}")
+        file_path = UPLOAD_DIR / f"{local_file_id}{ext}"
+        with open(file_path, "wb") as f:
+            f.write(file_content)
+        file_url = f"/api/files/{local_file_id}{ext}"
+
     attachment = {
-        "file_id": f"gdrive_{file_id}",
+        "file_id": local_file_id,
         "filename": file_name or "Drive file",
-        "url": file_url or f"https://drive.google.com/file/d/{file_id}/view",
-        "icon": file_icon,
-        "mime_type": file_mime,
+        "url": file_url,
         "source": "google_drive",
+        "mime_type": file_mime,
         "uploaded_at": datetime.now(timezone.utc).isoformat()
     }
 
@@ -3757,13 +3880,12 @@ def _format_dropbox_entry(entry):
 
 @api_router.post("/integrations/dropbox/attach")
 async def dropbox_attach_file(request: Request, user: User = Depends(get_current_user)):
-    """Attach a Dropbox file to a card as a link"""
+    """Download a Dropbox file and store it in Odapto"""
     body = await request.json()
     card_id = body.get("card_id")
     file_id = body.get("file_id")
     file_name = body.get("file_name")
     file_path = body.get("file_path")
-    file_url = body.get("file_url")
 
     if not card_id or not file_id:
         raise HTTPException(status_code=400, detail="card_id and file_id required")
@@ -3776,36 +3898,53 @@ async def dropbox_attach_file(request: Request, user: User = Depends(get_current
     if not await check_board_access(board, user):
         raise HTTPException(status_code=403, detail="Access denied")
 
-    # Try to get a sharing link
-    actual_url = file_url
     access_token = await get_dropbox_access_token(user.user_id)
-    if access_token and file_path:
-        try:
-            async with httpx.AsyncClient() as http_client:
-                link_resp = await http_client.post(
-                    f"{DROPBOX_API_URL}/sharing/create_shared_link_with_settings",
-                    headers={
-                        "Authorization": f"Bearer {access_token}",
-                        "Content-Type": "application/json"
-                    },
-                    json={"path": file_path, "settings": {"requested_visibility": "public"}}
-                )
-                if link_resp.status_code == 200:
-                    actual_url = link_resp.json().get("url", file_url)
-                elif link_resp.status_code == 409:
-                    # Link already exists, extract it
-                    err = link_resp.json()
-                    if "shared_link_already_exists" in str(err):
-                        existing = err.get("error", {}).get("shared_link_already_exists", {}).get("metadata", {})
-                        actual_url = existing.get("url", file_url)
-        except Exception as e:
-            logger.warning(f"[DROPBOX] Failed to create sharing link: {e}")
+    if not access_token:
+        raise HTTPException(status_code=401, detail="Dropbox not connected")
+
+    # Download file from Dropbox
+    try:
+        async with httpx.AsyncClient(timeout=120) as http_client:
+            dl_resp = await http_client.post(
+                "https://content.dropboxapi.com/2/files/download",
+                headers={
+                    "Authorization": f"Bearer {access_token}",
+                    "Dropbox-API-Arg": json.dumps({"path": file_path})
+                }
+            )
+            if dl_resp.status_code != 200:
+                logger.error(f"[DROPBOX] Download failed: {dl_resp.status_code} {dl_resp.text[:200]}")
+                raise HTTPException(status_code=502, detail="Failed to download file from Dropbox")
+
+            file_content = dl_resp.content
+            content_type = dl_resp.headers.get("Content-Type", "application/octet-stream")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[DROPBOX] Download error: {e}")
+        raise HTTPException(status_code=502, detail="Failed to download file from Dropbox")
+
+    # Store file
+    local_file_id = f"file_{uuid.uuid4().hex[:12]}"
+    ext = Path(file_name).suffix if file_name else ""
+    storage_path = f"attachments/{local_file_id}{ext}"
+
+    try:
+        result = put_object(storage_path, file_content, content_type)
+        file_url = result.get("public_url") or f"/api/storage/{storage_path}"
+    except Exception as e:
+        logger.warning(f"[STORAGE] Object storage failed, saving locally: {e}")
+        local_path = UPLOAD_DIR / f"{local_file_id}{ext}"
+        with open(local_path, "wb") as f:
+            f.write(file_content)
+        file_url = f"/api/files/{local_file_id}{ext}"
 
     attachment = {
-        "file_id": f"dropbox_{file_id}",
+        "file_id": local_file_id,
         "filename": file_name or "Dropbox file",
-        "url": actual_url,
+        "url": file_url,
         "source": "dropbox",
+        "mime_type": content_type,
         "uploaded_at": datetime.now(timezone.utc).isoformat()
     }
 
@@ -3860,6 +3999,9 @@ async def startup_db_check():
         logger.info(f"[STARTUP] DB connected: {db.name}, ping={result}, users={user_count}, sessions={session_count}")
     except Exception as e:
         logger.error(f"[STARTUP] DB connection FAILED: {e}")
+    
+    # Initialize object storage
+    init_storage()
 
 
 @app.on_event("shutdown")

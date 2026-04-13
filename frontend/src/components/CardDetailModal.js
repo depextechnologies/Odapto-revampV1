@@ -645,15 +645,13 @@ export const CardDetailModal = ({ card, onClose, onUpdate, onDelete }) => {
                 {attachments.map((att, idx) => {
                   const isImage = att.filename?.match(/\.(jpg|jpeg|png|gif|webp)$/i);
                   const isPdf = att.filename?.match(/\.pdf$/i);
-                  const isDriveFile = att.source === 'google_drive';
-                  const isDropboxFile = att.source === 'dropbox';
                   const fileUrl = att.url?.startsWith('http') ? att.url : `${API_BASE}${att.url}`;
                   
                   return (
                     <div key={idx} className="group border border-border rounded-lg overflow-hidden hover:border-odapto-orange/50 transition-colors">
                       {/* Preview Area */}
                       <div className="relative">
-                        {isImage && !isDriveFile && !isDropboxFile ? (
+                        {isImage ? (
                           <div className="h-32 bg-muted flex items-center justify-center overflow-hidden">
                             <img 
                               src={fileUrl} 
@@ -664,17 +662,13 @@ export const CardDetailModal = ({ card, onClose, onUpdate, onDelete }) => {
                         ) : (
                           <div className="h-20 bg-muted flex items-center justify-center">
                             <div className="text-center">
-                              {isDriveFile ? (
-                                <img src="https://upload.wikimedia.org/wikipedia/commons/1/12/Google_Drive_icon_%282020%29.svg" alt="Drive" className="w-8 h-8 mx-auto mb-1" />
-                              ) : isDropboxFile ? (
-                                <img src="https://upload.wikimedia.org/wikipedia/commons/7/78/Dropbox_Icon.svg" alt="Dropbox" className="w-8 h-8 mx-auto mb-1" />
-                              ) : isPdf ? (
+                              {isPdf ? (
                                 <FileText className="w-8 h-8 mx-auto text-red-500 mb-1" />
                               ) : (
                                 <FileIcon className="w-8 h-8 mx-auto text-muted-foreground mb-1" />
                               )}
                               <span className="text-xs text-muted-foreground uppercase">
-                                {isDriveFile ? 'Google Drive' : isDropboxFile ? 'Dropbox' : att.filename?.split('.').pop()}
+                                {att.filename?.split('.').pop()}
                               </span>
                             </div>
                           </div>
@@ -726,9 +720,15 @@ export const CardDetailModal = ({ card, onClose, onUpdate, onDelete }) => {
                       <div className="p-2 flex items-center justify-between">
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">{att.filename}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {new Date(att.uploaded_at).toLocaleDateString()}
-                          </p>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <span>{new Date(att.uploaded_at).toLocaleDateString()}</span>
+                            {att.source === 'google_drive' && (
+                              <span className="px-1.5 py-0.5 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded text-[10px]">Drive</span>
+                            )}
+                            {att.source === 'dropbox' && (
+                              <span className="px-1.5 py-0.5 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded text-[10px]">Dropbox</span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
