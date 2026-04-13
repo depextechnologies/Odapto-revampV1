@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { format, isToday, isPast, isFuture, formatDistanceToNow } from 'date-fns';
 import { apiPatch, apiPost, apiDelete, apiCall, apiGet } from '../utils/api';
 import DriveFilePicker from './DriveFilePicker';
+import DropboxFilePicker from './DropboxFilePicker';
 import { 
   Calendar as CalendarIcon, 
   Tag, 
@@ -166,6 +167,7 @@ export const CardDetailModal = ({ card, onClose, onUpdate, onDelete }) => {
   // Attachment upload
   const [uploading, setUploading] = useState(false);
   const [drivePickerOpen, setDrivePickerOpen] = useState(false);
+  const [dropboxPickerOpen, setDropboxPickerOpen] = useState(false);
   
   // Activity history
   const [activities, setActivities] = useState([]);
@@ -644,13 +646,14 @@ export const CardDetailModal = ({ card, onClose, onUpdate, onDelete }) => {
                   const isImage = att.filename?.match(/\.(jpg|jpeg|png|gif|webp)$/i);
                   const isPdf = att.filename?.match(/\.pdf$/i);
                   const isDriveFile = att.source === 'google_drive';
+                  const isDropboxFile = att.source === 'dropbox';
                   const fileUrl = att.url?.startsWith('http') ? att.url : `${API_BASE}${att.url}`;
                   
                   return (
                     <div key={idx} className="group border border-border rounded-lg overflow-hidden hover:border-odapto-orange/50 transition-colors">
                       {/* Preview Area */}
                       <div className="relative">
-                        {isImage && !isDriveFile ? (
+                        {isImage && !isDriveFile && !isDropboxFile ? (
                           <div className="h-32 bg-muted flex items-center justify-center overflow-hidden">
                             <img 
                               src={fileUrl} 
@@ -663,13 +666,15 @@ export const CardDetailModal = ({ card, onClose, onUpdate, onDelete }) => {
                             <div className="text-center">
                               {isDriveFile ? (
                                 <img src="https://upload.wikimedia.org/wikipedia/commons/1/12/Google_Drive_icon_%282020%29.svg" alt="Drive" className="w-8 h-8 mx-auto mb-1" />
+                              ) : isDropboxFile ? (
+                                <img src="https://upload.wikimedia.org/wikipedia/commons/7/78/Dropbox_Icon.svg" alt="Dropbox" className="w-8 h-8 mx-auto mb-1" />
                               ) : isPdf ? (
                                 <FileText className="w-8 h-8 mx-auto text-red-500 mb-1" />
                               ) : (
                                 <FileIcon className="w-8 h-8 mx-auto text-muted-foreground mb-1" />
                               )}
                               <span className="text-xs text-muted-foreground uppercase">
-                                {isDriveFile ? 'Google Drive' : att.filename?.split('.').pop()}
+                                {isDriveFile ? 'Google Drive' : isDropboxFile ? 'Dropbox' : att.filename?.split('.').pop()}
                               </span>
                             </div>
                           </div>
@@ -748,7 +753,17 @@ export const CardDetailModal = ({ card, onClose, onUpdate, onDelete }) => {
                   data-testid="attach-from-drive-btn"
                 >
                   <HardDrive className="w-4 h-4 mr-2" />
-                  Attach from Google Drive
+                  Google Drive
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setDropboxPickerOpen(true)}
+                  className="w-full"
+                  data-testid="attach-from-dropbox-btn"
+                >
+                  <HardDrive className="w-4 h-4 mr-2" />
+                  Dropbox
                 </Button>
               </div>
             </div>
@@ -996,6 +1011,17 @@ export const CardDetailModal = ({ card, onClose, onUpdate, onDelete }) => {
     <DriveFilePicker
       open={drivePickerOpen}
       onClose={() => setDrivePickerOpen(false)}
+      cardId={card.card_id}
+      onAttached={(attachment) => {
+        const updated = [...attachments, attachment];
+        setAttachments(updated);
+        onUpdate({ ...card, attachments: updated });
+      }}
+    />
+
+    <DropboxFilePicker
+      open={dropboxPickerOpen}
+      onClose={() => setDropboxPickerOpen(false)}
       cardId={card.card_id}
       onAttached={(attachment) => {
         const updated = [...attachments, attachment];

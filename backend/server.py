@@ -3255,6 +3255,9 @@ async def get_integration_status(user: User = Depends(get_current_user)):
     gdrive = await db.integrations.find_one(
         {"user_id": user.user_id, "provider": "google_drive"}, {"_id": 0}
     )
+    dropbox = await db.integrations.find_one(
+        {"user_id": user.user_id, "provider": "dropbox"}, {"_id": 0}
+    )
     return {
         "google_drive": {
             "connected": bool(gdrive and gdrive.get("refresh_token")),
@@ -3262,7 +3265,11 @@ async def get_integration_status(user: User = Depends(get_current_user)):
             "connected_at": gdrive.get("connected_at") if gdrive else None
         },
         "onedrive": {"connected": False},
-        "dropbox": {"connected": False}
+        "dropbox": {
+            "connected": bool(dropbox and dropbox.get("refresh_token")),
+            "email": dropbox.get("email") if dropbox else None,
+            "connected_at": dropbox.get("connected_at") if dropbox else None
+        }
     }
 
 @api_router.get("/integrations/google-drive/connect")
@@ -3509,6 +3516,315 @@ async def gdrive_disconnect(user: User = Depends(get_current_user)):
     """Disconnect Google Drive"""
     await db.integrations.delete_one({"user_id": user.user_id, "provider": "google_drive"})
     return {"message": "Google Drive disconnected"}
+
+# ============== DROPBOX INTEGRATION ==============
+
+DROPBOX_AUTH_URL = "https://www.dropbox.com/oauth2/authorize"
+DROPBOX_TOKEN_URL = "https://api.dropboxapi.com/oauth2/token"
+DROPBOX_API_URL = "https://api.dropboxapi.com/2"
+
+@api_router.get("/integrations/dropbox/connect")
+async def dropbox_connect(request: Request, token: str = None):
+    """Initiate Dropbox OAuth — redirects to Dropbox with file read scope.
+    Accepts session token via query param since browser redirect doesn't include headers."""
+    session_token = token
+    if not session_token:
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            session_token = auth_header.split(" ")[1]
+
+    if not session_token:
+        raise HTTPException(status_code=401, detail="Not authenticated - token required")
+
+    session = await db.user_sessions.find_one({"session_token": session_token}, {"_id": 0})
+    if not session:
+        raise HTTPException(status_code=401, detail="Invalid session")
+
+    expires_at = session["expires_at"]
+    if isinstance(expires_at, str):
+        expires_at = datetime.fromisoformat(expires_at)
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=401, detail="Session expired")
+
+    user_id = session["user_id"]
+
+    app_key = os.environ.get("DROPBOX_APP_KEY")
+    if not app_key:
+        raise HTTPException(status_code=500, detail="Dropbox integration not configured")
+
+    frontend_url = os.environ.get("FRONTEND_URL", str(request.base_url).rstrip("/"))
+    redirect_uri = f"{frontend_url}/api/integrations/dropbox/callback"
+
+    state = secrets.token_urlsafe(32)
+    await db.oauth_states.insert_one({
+        "state": state,
+        "user_id": user_id,
+        "provider": "dropbox",
+        "created_at": datetime.now(timezone.utc)
+    })
+
+    params = {
+        "client_id": app_key,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "token_access_type": "offline",
+        "state": state
+    }
+    dropbox_url = f"{DROPBOX_AUTH_URL}?{urlencode(params)}"
+    return RedirectResponse(url=dropbox_url)
+
+@api_router.get("/integrations/dropbox/callback")
+async def dropbox_callback(request: Request, code: str = None, state: str = None, error: str = None):
+    """Handle Dropbox OAuth callback"""
+    frontend_url = os.environ.get("FRONTEND_URL", str(request.base_url).rstrip("/"))
+
+    if error:
+        return RedirectResponse(url=f"{frontend_url}/integrations?error={error}")
+
+    if not code or not state:
+        return RedirectResponse(url=f"{frontend_url}/integrations?error=missing_params")
+
+    oauth_state = await db.oauth_states.find_one({"state": state})
+    if not oauth_state:
+        return RedirectResponse(url=f"{frontend_url}/integrations?error=invalid_state")
+
+    user_id = oauth_state["user_id"]
+    await db.oauth_states.delete_one({"state": state})
+
+    app_key = os.environ.get("DROPBOX_APP_KEY")
+    app_secret = os.environ.get("DROPBOX_APP_SECRET")
+    redirect_uri = f"{frontend_url}/api/integrations/dropbox/callback"
+
+    try:
+        async with httpx.AsyncClient() as http_client:
+            token_resp = await http_client.post(DROPBOX_TOKEN_URL, data={
+                "code": code,
+                "grant_type": "authorization_code",
+                "redirect_uri": redirect_uri,
+                "client_id": app_key,
+                "client_secret": app_secret
+            })
+
+            if token_resp.status_code != 200:
+                logger.error(f"[DROPBOX] Token exchange failed: {token_resp.text}")
+                return RedirectResponse(url=f"{frontend_url}/integrations?error=token_exchange_failed")
+
+            tokens = token_resp.json()
+            access_token = tokens.get("access_token")
+            refresh_token = tokens.get("refresh_token", "")
+
+            # Get account info
+            account_resp = await http_client.post(
+                f"{DROPBOX_API_URL}/users/get_current_account",
+                headers={"Authorization": f"Bearer {access_token}",
+                         "Content-Type": "application/json"},
+                content="null"
+            )
+            dropbox_email = ""
+            if account_resp.status_code == 200:
+                account = account_resp.json()
+                dropbox_email = account.get("email", "")
+
+        await db.integrations.update_one(
+            {"user_id": user_id, "provider": "dropbox"},
+            {"$set": {
+                "user_id": user_id,
+                "provider": "dropbox",
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+                "email": dropbox_email,
+                "connected_at": datetime.now(timezone.utc).isoformat()
+            }},
+            upsert=True
+        )
+
+        return RedirectResponse(url=f"{frontend_url}/integrations?connected=dropbox")
+
+    except Exception as e:
+        logger.error(f"[DROPBOX] Callback error: {e}")
+        return RedirectResponse(url=f"{frontend_url}/integrations?error=server_error")
+
+async def get_dropbox_access_token(user_id: str):
+    """Get a valid Dropbox access token, refreshing if needed"""
+    integration = await db.integrations.find_one(
+        {"user_id": user_id, "provider": "dropbox"}, {"_id": 0}
+    )
+    if not integration:
+        return None
+
+    refresh_token = integration.get("refresh_token")
+    if not refresh_token:
+        # Short-lived token only, return stored one
+        return integration.get("access_token")
+
+    app_key = os.environ.get("DROPBOX_APP_KEY")
+    app_secret = os.environ.get("DROPBOX_APP_SECRET")
+
+    async with httpx.AsyncClient() as http_client:
+        resp = await http_client.post(DROPBOX_TOKEN_URL, data={
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+            "client_id": app_key,
+            "client_secret": app_secret
+        })
+        if resp.status_code != 200:
+            # Refresh failed, try stored token
+            return integration.get("access_token")
+        new_token = resp.json().get("access_token")
+        await db.integrations.update_one(
+            {"user_id": user_id, "provider": "dropbox"},
+            {"$set": {"access_token": new_token}}
+        )
+        return new_token
+
+@api_router.get("/integrations/dropbox/files")
+async def dropbox_list_files(
+    user: User = Depends(get_current_user),
+    path: str = "",
+    search: str = None
+):
+    """Browse Dropbox files"""
+    access_token = await get_dropbox_access_token(user.user_id)
+    if not access_token:
+        raise HTTPException(status_code=401, detail="Dropbox not connected")
+
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json"
+    }
+
+    async with httpx.AsyncClient() as http_client:
+        if search:
+            resp = await http_client.post(
+                f"{DROPBOX_API_URL}/files/search_v2",
+                headers=headers,
+                json={"query": search, "options": {"max_results": 50}}
+            )
+            if resp.status_code == 401:
+                raise HTTPException(status_code=401, detail="Dropbox token expired. Please reconnect.")
+            if resp.status_code != 200:
+                raise HTTPException(status_code=502, detail="Failed to search Dropbox files")
+            data = resp.json()
+            files = []
+            for match in data.get("matches", []):
+                metadata = match.get("metadata", {}).get("metadata", {})
+                files.append(_format_dropbox_entry(metadata))
+            return {"files": files, "has_more": data.get("has_more", False)}
+        else:
+            folder_path = path if path else ""
+            resp = await http_client.post(
+                f"{DROPBOX_API_URL}/files/list_folder",
+                headers=headers,
+                json={"path": folder_path, "limit": 50, "include_media_info": True}
+            )
+            if resp.status_code == 401:
+                raise HTTPException(status_code=401, detail="Dropbox token expired. Please reconnect.")
+            if resp.status_code != 200:
+                raise HTTPException(status_code=502, detail="Failed to fetch Dropbox files")
+            data = resp.json()
+            files = [_format_dropbox_entry(e) for e in data.get("entries", [])]
+            return {"files": files, "has_more": data.get("has_more", False), "cursor": data.get("cursor")}
+
+def _format_dropbox_entry(entry):
+    """Format a Dropbox file/folder entry for the frontend"""
+    tag = entry.get(".tag", "file")
+    is_folder = tag == "folder"
+    name = entry.get("name", "Unknown")
+    path = entry.get("path_lower", entry.get("path_display", ""))
+    size = entry.get("size", 0)
+
+    # Build a shareable link from the path
+    file_url = f"https://www.dropbox.com/home{path}" if path else ""
+
+    return {
+        "id": entry.get("id", path),
+        "name": name,
+        "path": path,
+        "is_folder": is_folder,
+        "size": size,
+        "modified": entry.get("server_modified", entry.get("client_modified", "")),
+        "url": file_url
+    }
+
+@api_router.post("/integrations/dropbox/attach")
+async def dropbox_attach_file(request: Request, user: User = Depends(get_current_user)):
+    """Attach a Dropbox file to a card as a link"""
+    body = await request.json()
+    card_id = body.get("card_id")
+    file_id = body.get("file_id")
+    file_name = body.get("file_name")
+    file_path = body.get("file_path")
+    file_url = body.get("file_url")
+
+    if not card_id or not file_id:
+        raise HTTPException(status_code=400, detail="card_id and file_id required")
+
+    card = await db.cards.find_one({"card_id": card_id}, {"_id": 0})
+    if not card:
+        raise HTTPException(status_code=404, detail="Card not found")
+
+    board = await db.boards.find_one({"board_id": card["board_id"]}, {"_id": 0})
+    if not await check_board_access(board, user):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    # Try to get a sharing link
+    actual_url = file_url
+    access_token = await get_dropbox_access_token(user.user_id)
+    if access_token and file_path:
+        try:
+            async with httpx.AsyncClient() as http_client:
+                link_resp = await http_client.post(
+                    f"{DROPBOX_API_URL}/sharing/create_shared_link_with_settings",
+                    headers={
+                        "Authorization": f"Bearer {access_token}",
+                        "Content-Type": "application/json"
+                    },
+                    json={"path": file_path, "settings": {"requested_visibility": "public"}}
+                )
+                if link_resp.status_code == 200:
+                    actual_url = link_resp.json().get("url", file_url)
+                elif link_resp.status_code == 409:
+                    # Link already exists, extract it
+                    err = link_resp.json()
+                    if "shared_link_already_exists" in str(err):
+                        existing = err.get("error", {}).get("shared_link_already_exists", {}).get("metadata", {})
+                        actual_url = existing.get("url", file_url)
+        except Exception as e:
+            logger.warning(f"[DROPBOX] Failed to create sharing link: {e}")
+
+    attachment = {
+        "file_id": f"dropbox_{file_id}",
+        "filename": file_name or "Dropbox file",
+        "url": actual_url,
+        "source": "dropbox",
+        "uploaded_at": datetime.now(timezone.utc).isoformat()
+    }
+
+    await db.cards.update_one(
+        {"card_id": card_id},
+        {"$push": {"attachments": attachment}}
+    )
+
+    await manager.broadcast(board["board_id"], {
+        "type": "attachment_added",
+        "card_id": card_id,
+        "attachment": attachment
+    })
+
+    await log_card_activity(
+        card_id=card_id, board_id=board["board_id"], user=user,
+        action="added_attachment", details={"filename": file_name, "source": "dropbox"}
+    )
+
+    return attachment
+
+@api_router.delete("/integrations/dropbox/disconnect")
+async def dropbox_disconnect(user: User = Depends(get_current_user)):
+    """Disconnect Dropbox"""
+    await db.integrations.delete_one({"user_id": user.user_id, "provider": "dropbox"})
+    return {"message": "Dropbox disconnected"}
 
 # ============== HEALTH CHECK ==============
 

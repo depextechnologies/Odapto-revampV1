@@ -31,6 +31,8 @@ export default function IntegrationsPage() {
     const error = searchParams.get('error');
     if (connected === 'google_drive') {
       toast.success('Google Drive connected successfully!');
+    } else if (connected === 'dropbox') {
+      toast.success('Dropbox connected successfully!');
     } else if (error) {
       toast.error(`Connection failed: ${error.replace(/_/g, ' ')}`);
     }
@@ -48,20 +50,28 @@ export default function IntegrationsPage() {
   };
 
   const handleConnect = (provider) => {
+    const token = localStorage.getItem('odapto_session_token') || sessionStorage.getItem('odapto_session_token');
     if (provider === 'google_drive') {
-      // Pass session token as query param since browser redirect doesn't include headers
-      const token = localStorage.getItem('odapto_session_token');
       window.location.href = `${API}/integrations/google-drive/connect${token ? `?token=${token}` : ''}`;
+    } else if (provider === 'dropbox') {
+      window.location.href = `${API}/integrations/dropbox/connect${token ? `?token=${token}` : ''}`;
     }
   };
 
   const handleDisconnect = async (provider) => {
     setDisconnecting(provider);
     try {
-      if (provider === 'google_drive') {
-        const res = await apiDelete('/integrations/google-drive/disconnect');
+      const endpoint = provider === 'google_drive'
+        ? '/integrations/google-drive/disconnect'
+        : provider === 'dropbox'
+        ? '/integrations/dropbox/disconnect'
+        : null;
+
+      if (endpoint) {
+        const res = await apiDelete(endpoint);
         if (res.ok) {
-          toast.success('Google Drive disconnected');
+          const name = provider === 'google_drive' ? 'Google Drive' : provider === 'dropbox' ? 'Dropbox' : provider;
+          toast.success(`${name} disconnected`);
           fetchStatus();
         } else {
           toast.error('Failed to disconnect');
@@ -94,7 +104,7 @@ export default function IntegrationsPage() {
       name: 'Dropbox',
       logo: DROPBOX_LOGO,
       description: 'Link your Dropbox to easily share and attach files to cards.',
-      available: false
+      available: true
     }
   ];
 
