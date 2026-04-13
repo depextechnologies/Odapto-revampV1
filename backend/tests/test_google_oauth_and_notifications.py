@@ -82,7 +82,7 @@ class TestGoogleOAuth:
         """POST /api/auth/google/callback should reject invalid code"""
         response = requests.post(f"{BASE_URL}/api/auth/google/callback", json={
             "code": "invalid_code_123",
-            "redirect_uri": "https://collab-tasks-57.preview.emergentagent.com/auth/google/callback"
+            "redirect_uri": "https://workspace-collab-3.preview.emergentagent.com/auth/google/callback"
         })
         
         assert response.status_code == 401, f"Expected 401 for invalid code, got {response.status_code}"

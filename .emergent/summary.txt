@@ -1,156 +1,144 @@
 <analysis>**original_problem_statement:**
-The user wants to build Odapto, a production-grade Kanban-based work management SaaS similar to Trello. After building the core web application, the user requested to wrap it into native Android and iOS applications using Capacitor.
+The user wants to build Odapto, a production-grade Kanban-based work management SaaS similar to Trello. After building the core web application, the user requested to wrap it into native Android and iOS applications using Capacitor. The application needs a robust white-labeled Google OAuth implementation, real-time collaboration, template management, and cloud storage integrations.
 
 **PRODUCT REQUIREMENTS:**
--   **Tech Stack:** React (Web-first) + FastAPI + MongoDB, with Capacitor for mobile.
--   **Branding:** Use Odapto logos, support light/dark modes, clean UX.
--   **Authentication:** The user initially used Emergent-managed Google OAuth but has since requested it be replaced with a fully white-labeled direct Google OAuth 2.0 implementation.
--   **Core Features:** Workspaces, Teams, real-time Kanban Boards (drag-and-drop), and a token-based email invitation system.
--   **Card Functionality:** Rich cards with descriptions, labels, attachments, priority, members, checklists, comments, and activity logs.
--   **Mobile App:** The existing React web app to be packaged for Android (tablet/mobile) and iOS (iPad/mobile) with a branded animated splash screen.
--   **Notifications:** All board members must receive real-time notifications for all card activities (comments, attachments, etc.), and existing users should receive an email when invited to a new board.
--   **Deployment:** The application must be deployable to the user's custom domain () and run independently of the agent's active state.
+- **Tech Stack:** React (Web-first) + FastAPI + MongoDB, with Capacitor for mobile.
+- **Branding:** Use Odapto logos uniformly, support light/dark modes.
+- **Core Features:** Workspaces, Teams, Kanban Boards, Real-time sync, token-based email invites, template creation/management.
+- **Mobile App:** React web app packaged for Android and iOS.
+- **Cloud Integrations:** Google Drive, Dropbox, OneDrive integration for file attachments.
+- **Deployment:** Must be deployable using a MongoDB Atlas backend.
 
 **User's preferred language**: English
+*(INSTRUCTION to next agent: You MUST respond in English)*
 
 **what currently exists?**
-A full-stack Kanban-style application (Odapto) with a React frontend, FastAPI backend, and MongoDB database. It includes user authentication via JWT (email/password) and a direct, white-labeled Google OAuth 2.0 flow. The frontend is wrapped with Capacitor for mobile builds and features a custom animated splash screen and responsive login UI for tablets and phones.
-
-The application has a full suite of features including workspaces, boards with drag-and-drop cards, a template system, real-time sync via WebSockets, and an email invitation system. A robust notification system alerts all board members of card activities.
-
-Key bugs, including a critical CORS issue, a Board Not Found error for invited users, and frontend body stream already read errors, have been resolved. The codebase has been hardened to use the production domain () dynamically, making it independent of the preview environment.
+A fully functional Kanban application with working workspaces, boards, real-time websocket sync (covering 18 event types), authentication, and Admin Template Management. Mobile Google OAuth flow is implemented via Capacitor. Google Drive and Dropbox integrations are fully implemented. Crucially, imported cloud files are now downloaded and stored locally via Emergent Object Storage rather than just being linked, enabling users to use them as board/card cover images.
 
 **Last working item**:
--   Last item agent was working: Fixing a critical production deployment failure. The user provided logs showing .
--   Status: IN PROGRESS
--   Agent Testing Done: N
--   Which testing method agent to use? backend testing agent
--   User Testing Done: N
+- **Last item agent was working**: Modifying the Google Drive and Dropbox integrations to use Emergent Object Storage. Files selected from cloud storage are now downloaded and saved directly to Odapto's backend so they can be fully utilized as cover images and standard attachments.
+- **Status**: USER VERIFICATION PENDING
+- **Agent Testing Done**: Y (Testing agent  completed successfully).
+- **Which testing method agent to use?**: NA (Testing agent already used for this feature)
+- **User Testing Done**: N
 
 **All Pending/In progress Issue list**:
--   Issue 1: Production Deployment Failure (P0 - BLOCKER)
-
-**Issues Detail:**
--   **Issue 1: Production Deployment Failure**
-    -   **Description:** The application fails to deploy to the user's production environment. The build logs show a . This happens because the deployment environment (which uses MongoDB Atlas) is trying to connect to a database named , a value taken from the  file intended for local development. The production MongoDB Atlas user is not authorized to access a database with this name.
-    -   **Attempted fixes:** The agent correctly identified that the code uses the  environment variable, but the value being supplied during the production build process is incorrect. The  confirmed this is a blocker related to environment configuration.
-    -   **Next debug checklist:**
-        -   The root cause is known. The application code is correct in using .
-        -   The problem is purely in the deployment configuration. The agent needs to instruct the user on how to set the  secret/environment variable within the Emergent deployment settings.
-        -   This value must match the database name that the user has created and authorized in their MongoDB Atlas account.
-    -   **Why fix this issue and what will be achieved with the fix?** This is the final blocker preventing the application from running on the production domain (). Fixing it will allow a successful deployment.
-    -   **Status:** IN PROGRESS
-    -   **Is recurring issue?** N
-    -   **Should Test frontend/backend/both after fix?** backend
-    -   **Blocked on other issue:** None. This is the primary blocker.
+Issue 1: OneDrive Integration (P1)
+- Attempted fixes: None yet.
+- Next debug checklist: Request OneDrive API credentials from the user. Implement the OAuth flow (, ), file picker component (), and backend download logic utilizing Object Storage, mimicking the Google Drive and Dropbox implementations.
+- Why fix this issue and what will be achieved with the fix? Completes the user's requested trio of cloud storage integrations.
+- Status: NOT STARTED
+- Is recurring issue? N
+- Should Test frontend/backend/both after fix? both
+- Blocked on other issue: Awaiting OneDrive App Key/Secret from the user.
 
 **In progress Task List**:
-- None.
+None.
 
-**Upcoming and Future Tasks**
-**Upcoming Tasks:**
--   **🟣 P0 - Final Mobile Build Guidance:** Once the deployment is stable on , provide the user with the final, validated instructions from  to create the Android APK and iOS IPA.
--   **🟡 P1 - Production Sanity Check:** After a successful deployment, perform a final end-to-end test on  to confirm all functionalities (login, Google OAuth, board operations, notifications) are working as expected.
+**Upcoming and Future Tasks**:
+Upcoming Tasks:
+- P1: OneDrive Integration (Waiting on user credentials).
+Future Tasks:
+- P2: Board background customization (pre-selected images/upload).
+- P2: Advanced Filtering (by label, due date, member).
+- P2: Refactor  into modular FastAPI routers (currently at ~4000 lines).
+- P2: Export boards (JSON/CSV).
+- P2: Subscription tiers & monetization.
 
-**Future Tasks:**
--   **⚪️ P2 - Board Customization:** Allow users to choose from pre-selected images or upload their own board backgrounds.
--   **⚪️ P2 - Advanced Filtering:** Implement board filters (by label, due date, member).
--   **⚪️ P2 - Refactor :** Split the monolithic  into smaller, more manageable FastAPI routers.
--   **⚪️ P2 - Monetization & Usability:** Implement board export (JSON/CSV), keyboard shortcuts, and subscription tiers.
+**Completed work in this session**:
+- Template Management Controls: Added full Admin interface to view, edit, preview, and delete templates.
+- Admin Template Full Board Editing: Modified backend access controls so admins can bypass workspace checks to open template boards () and edit lists/cards natively.
+- Real-time WebSocket Enhancement: Added backend broadcasts for missing events (, , , ) ensuring 100% real-time UI updates without refresh.
+- Gmail Auth Flow for Mobile: Configured  and a deep link listener to handle Google OAuth callbacks natively on iOS/Android.
+- Google Drive Integration: Added OAuth flow, backend endpoints, and frontend Picker.
+- Dropbox Integration: Added OAuth flow, backend endpoints, and frontend Picker.
+- Emergent Object Storage Setup: Integrated object storage via the Emergent LLM Key. Refactored the Drive/Dropbox attach endpoints to download the cloud files and store them securely, allowing them to be served via  and used as card cover images.
 
-**Completed work in this session**
--   **Resolved CORS Blocker:** Fixed a persistent CORS issue by removing all cookie-based logic and standardizing on .
--   **White-Labeled Google OAuth:** Successfully migrated from Emergent-hosted authentication to a direct Google OAuth 2.0 implementation within the FastAPI backend, removing all external auth dependencies.
--   **Enhanced Notification System:** Implemented real-time notifications for all board members for card activities and ensured existing users receive email invitations.
--   **Fixed Invited User Access Bug:** Corrected a critical flaw where users invited directly to a board were not added to the workspace, preventing them from accessing the board.
--   **Mobile App Experience:** Implemented an animated video splash screen, responsive login UI for mobile/tablet, and generated all necessary icons and assets. Created  for user guidance.
--   **Frontend Stability:** Eliminated body stream already read errors and fixed a redirect race condition after login/registration by rewriting  and .
--   **Deployment Hardening:** Made the frontend configuration robust by adding logic to  to dynamically use  when in production, making the deployed application independent of the agent's preview environment.
+**Earlier issues found/mentioned but not fixed**:
+None.
 
-**Earlier issues found/mentioned but not fixed**
-- None.
-
-**Known issue recurrence from previous fork**
--   **Issue recurrence in previous fork:** CORS errors.
--   **Recurrence count:** 3+
--   **Status:** RESOLVED
+**Known issue recurrence from previous fork**:
+- Issue recurrence in previous fork: None
+- Recurrence count: 0
+- Status: RESOLVED
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
--   **Frontend:** React, Tailwind CSS, Shadcn UI
--   **Backend:** FastAPI (Python)
--   **Database:** MongoDB (interfacing with Atlas in production)
--   **Mobile:** Capacitor
--   **Authentication:** JWT (email/password), Direct Google OAuth 2.0
--   **Real-time:** FastAPI WebSockets
+React, Tailwind CSS, Shadcn UI, Capacitor (Mobile wrappers), FastAPI (Python), MongoDB (Atlas), JWT Authentication, Direct Google OAuth 2.0, WebSockets, Emergent Object Storage.
 
 **key DB schema**
--   No schema changes were made. Key collections are , , , , and .
+- users: 
+- user_sessions: 
+- workspaces: 
+- boards: 
+- cards: 
+- integrations: 
 
 **changes in tech stack**
--   Authentication was migrated from Emergent-hosted Google Auth to a direct Google OAuth 2.0 implementation using  in the backend.
+- Added Emergent Object Storage using the Emergent LLM key to store attachments.
+- Added  for mobile OAuth handling.
 
 **All files of reference**
--   : Heavily modified to fix CORS, add new card feature endpoints, fix the invited user bug, implement direct Google OAuth, and enhance the notification system.
--   : Completely rewritten for stability, to fix body stream already read errors, and to implement the direct Google OAuth flow.
--   : Critically updated to ensure the deployed application on  is independent of the preview environment's URLs.
--   : The  in this file is the cause of the deployment issue and needs to be overridden by a secret in the production environment.
--   : Contains the final instructions for the user to build the mobile apps.
+- : Huge update. Contains logic for Drive/Dropbox OAuth, Object Storage initialization, and file downloading/serving. Also refactored access controls for templates ().
+- : Updated to handle OAuth connect/disconnect for Drive and Dropbox.
+- : Render logic updated for Object Storage file icons. Injects  and .
+- : Created for picking Google Drive files.
+- : Created for picking Dropbox files.
+- : Updated with deep-link listener for Capacitor OAuth callback.
+- : Added Templates tab with a full table of templates and edit/delete actions.
 
 **Areas that need refactoring**:
--    is a large monolith that should be broken down into separate routers for better maintainability (a recognized future task).
+- : Currently around ~4000 lines. The application is highly monolithic. Must be split into routers (, , , , etc.) as a P2 task.
 
 **key api endpoints**
--   **NEW:**  (Initiates Google OAuth flow)
--   **NEW:**  (Handles the OAuth callback)
--   **REMOVED:** The previous Emergent-based OAuth session endpoint.
--   **MODIFIED:** ,  (Now correctly adds users to the parent workspace).
--   **MODIFIED:**  (Checks both workspace and direct board membership).
+-  & 
+-  & 
+-  (Emergent Object storage file serving)
 
 **Critical Info for New Agent**
--   **Your immediate and only priority is to resolve the production deployment failure.** The error is .
--   **Root Cause:** The production deployment is using the database name  from the repository's  file, which is incorrect for the MongoDB Atlas environment.
--   **Solution:** The application code is correct. You must guide the user to configure their deployment environment. They need to add a secret/environment variable named  in their Emergent deployment settings. The value of this variable must be the name of the database they have created and authorized in their MongoDB Atlas account. Once this is set, they must re-deploy the application.
+- **Cloud Storage behavior:** Files imported from Google Drive and Dropbox are **downloaded** to the backend using Emergent Object Storage. They are *not* stored merely as external links. This ensures users can set them as cover images.
+- **Capacitor Mobile Auth:** Google OAuth for the mobile app uses  and a deep link listener setup in . Ensure any future OAuth additions (like OneDrive) follow this identical deep link pattern for the mobile app to function properly.
+- **Template Editing:** Admins and Privileged users bypass workspace membership validation when interacting with Template boards ().
 
 **documents and test reports created in this job**
--   
--   
--   
--   
--   
+- 
+- 
+-  through 
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **User:** Reports body stream already read and login redirect issues on . (Resolved)
-2.  **User:** Acknowledges website is working, requests guidance on building mobile apps. (Acknowledged)
-3.  **User:** Asks how to create Android/iPhone builds. (User request)
-4.  **User:** Reports that  stops working when the agent is inactive. (Resolved by hardening )
-5.  **User:** Reports successful login but is redirected back to the login page, with a body consumed error. (Resolved)
-6.  **User:** Confirms auth works, but redirect to  fails. (Resolved)
-7.  **User:** Reports deployment failure with MongoDB authorization error logs. (Current Blocker)
-8.  **User:** Confirms deployment is to  and not the preview environment.
-9.  **User:** Reports body stream already read error during login and  for Google OAuth on the live site. (Partially resolved - frontend fix done, user needs to configure Google Console)
-10. **User:** Asks why preview URL is being used and wants a fully white-labeled  experience. (Resolved by removing all hardcoded preview URLs).
+- User: Yes proceed with P0 (COMPLETED)
+- User: Template management is not working. Kindly check and fix the issues
+- User: Uploaded screenshots regarding Admin Template Management UI. (COMPLETED)
+- User: Uploaded screenshots regarding Admin template board editing lacking actual board edit capabilities. (COMPLETED)
+- User: Please proceed to the next action items. Thank you.
+- User: Provided Google OAuth Client ID.
+- User: Yes Drive API already enabled on Google Project. Please proceed (COMPLETED)
+- User: Provided Dropbox App key and secret. Lets integrate the dropbox first and then we will go for Onedrive (COMPLETED)
+- User: Showed Dropbox redirect URI issue, and requested that imported Drive/Dropbox files actually be usable as cover pictures inside the app. (COMPLETED)
+*(Agent transitioned cloud file integration to Emergent Object Storage so files are downloaded locally and usable. Pending user validation.)*
 
 **Project Health Check:**
--   **Broken:** The production deployment is blocked by a database authorization error ().
--   **Mocked:** None.
+- Broken: None.
+- Mocked: None.
 
 **3rd Party Integrations**
--   **Direct Google OAuth 2.0:** Uses user-provided  and  for a fully white-labeled experience.
--   **Gmail SMTP:** For sending transactional emails.
--   **Capacitor:** For building native mobile apps from the web codebase.
+- Google OAuth 2.0 (Authentication) — Requires User API Key
+- Gmail SMTP (Emails) — Requires User API Key
+- Capacitor (Mobile Wrapper)
+- Google Drive API (Storage) — Requires User API Key
+- Dropbox API (Storage) — Requires User API Key
+- Emergent Object Storage — uses Emergent LLM Key
 
 **Testing status**
--   **Testing agent used after significant changes:** YES. All major features (CORS fix, Card Features, OAuth, Notifications) were tested with the agent and reported 100% pass rates.
--   **Troubleshoot agent used after agent stuck in loop:** NO
--   **Test files created:** None.
--   **Known regressions:** None in the code. The only failure is in the production deployment pipeline due to misconfiguration.
+- Testing agent used after significant changes: YES (iteration 14 through 20)
+- Troubleshoot agent used after agent stuck in loop: NO
+- Test files created: None
+- Known regressions: None
 
 **Credentials to test flow:**
--   **Admin Email:** 
--   **Admin Password:** 
+- Admin:  / 
 
 **What agent forgot to execute**
-- The agent correctly identified the  deployment issue but did not bring it to a final resolution. The conversation was sidetracked by other frontend bugs that appeared on the live site. While those bugs were fixed, the core deployment blocker remains. The next agent must focus solely on guiding the user to fix the  environment variable in their deployment settings.</analysis>
+- The agent was successfully integrating Dropbox but ran out of context right as the Object Storage logic was finalized and tested. The next logical step is to ask the user to test the downloaded cloud file behavior, and subsequently, request their **OneDrive credentials** to execute the final cloud storage integration.</analysis>

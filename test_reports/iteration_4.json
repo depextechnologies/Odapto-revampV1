@@ -70,7 +70,7 @@
   "test_credentials": {
     "admin_email": "odapto.admin@emergent.com",
     "admin_password": "SecurePassword123!",
-    "board_url": "https://collab-tasks-57.preview.emergentagent.com/board/board_8b24ee8c579c"
+    "board_url": "https://workspace-collab-3.preview.emergentagent.com/board/board_8b24ee8c579c"
   },
   
   "seed_data_creation": "Test data exists: 3 cards with different due dates (overdue: card_da16e8e57260, today: card_58ddcbb322ce, future: card_e4bbbfa0692b). Future card has named labels. Checklist items and comments added during testing.",
