@@ -5,7 +5,7 @@
   "dependencies": {
     "@capacitor/android": "6",
     "@capacitor/app": "6",
-    "@capacitor/browser": "^8.0.3",
+    "@capacitor/browser": "6",
     "@capacitor/cli": "6",
     "@capacitor/core": "6",
     "@capacitor/haptics": "6",

@@ -56,6 +56,8 @@ Odapto is a production-grade Kanban-based work management SaaS similar to Trello
 - [x] Capacitor configured for Android and iOS
 - [x] Animated splash screen
 - [x] Responsive login UI for mobile/tablet
+- [x] Android Debug APK generated (com.odapto.app, 6.7MB, points to https://odapto.com)
+- [x] Download endpoint: /api/download/android
 
 ## Bug Fixes Applied (Latest)
 - [x] Fix 1: Logo consistency - ThemeLogo on login/register pages
@@ -83,6 +85,8 @@ Odapto is a production-grade Kanban-based work management SaaS similar to Trello
 - [x] Cloud Storage: Google Drive integration (OAuth connect/disconnect, file browsing, attach to cards) - Apr 2026
 - [x] Cloud Storage: Dropbox integration (OAuth connect/disconnect, file browsing, attach to cards, sharing links) - Apr 2026
 - [x] Integrations Page: functional with connect/disconnect for Google Drive & Dropbox, Coming Soon for OneDrive - Apr 2026
+- [x] Emergent Object Storage: Cloud files (Drive/Dropbox) downloaded and stored locally for cover image use - Apr 2026
+- [x] Android APK Generation: Debug APK built with Capacitor, configured for production (odapto.com) - Apr 2026
 
 ### P2 - Future
 - [ ] Cloud Storage: Dropbox, OneDrive (user will provide OAuth keys)
@@ -101,7 +105,8 @@ Odapto is a production-grade Kanban-based work management SaaS similar to Trello
 - **Auth**: Direct Google OAuth + Session tokens
 - **Email**: Gmail SMTP
 - **Real-time**: WebSockets (FastAPI)
-- **Mobile**: Capacitor (Android/iOS)
+- **Mobile**: Capacitor 6 (Android/iOS), Gradle 8.7, AGP 8.3.2, Android SDK 34
+- **Object Storage**: Emergent Object Storage (for cloud file persistence)
 
 ### Key Files
 - `/app/backend/server.py` - Main backend (monolith)

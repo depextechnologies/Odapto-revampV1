@@ -3986,6 +3986,16 @@ async def serve_upload(folder: str, filename: str):
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(file_path)
 
+@api_router.get("/download/android")
+async def download_android_apk():
+    """Serve the Android APK for download"""
+    apk_path = ROOT_DIR / "uploads" / "odapto-debug.apk"
+    if not apk_path.exists():
+        raise HTTPException(status_code=404, detail="APK not found")
+    return FileResponse(apk_path, media_type="application/vnd.android.package-archive", filename="Odapto.apk")
+
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
