@@ -81,7 +81,8 @@ Odapto is a production-grade Kanban-based work management SaaS similar to Trello
 ### P1 (Completed) - High Effort Items from Bug List
 - [x] Real-time Collaboration: WebSocket broadcast for comments, file uploads, member additions, card moves, attachments, board updates (18 event types) - Apr 2026
 - [x] Cloud Storage: Google Drive integration (OAuth connect/disconnect, file browsing, attach to cards) - Apr 2026
-- [x] Integrations Page: functional with connect/disconnect for Google Drive, Coming Soon for OneDrive/Dropbox - Apr 2026
+- [x] Cloud Storage: Dropbox integration (OAuth connect/disconnect, file browsing, attach to cards, sharing links) - Apr 2026
+- [x] Integrations Page: functional with connect/disconnect for Google Drive & Dropbox, Coming Soon for OneDrive - Apr 2026
 
 ### P2 - Future
 - [ ] Cloud Storage: Dropbox, OneDrive (user will provide OAuth keys)
